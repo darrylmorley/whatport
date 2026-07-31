@@ -114,14 +114,22 @@ public final class SMCPowerReader: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard openLocked() else { return [] }
+        return Self.buildPortPowerChannels(readKey: { self.readKey($0) })
+    }
+
+    // The channel rules, given a way to read a key's bytes. Split out from the
+    // kernel round-trips so recorded key dumps from other Macs can be replayed
+    // through the real decoders; the method above is then only responsible for
+    // opening the SMC and fetching bytes.
+    static func buildPortPowerChannels(readKey: (String) -> [UInt8]?) -> [RawSMCPortPower] {
         var channels: [RawSMCPortPower] = []
         for index in 1...4 {
-            guard let uuid = readUUID("D\(index)UI"), !uuid.isEmpty else { continue }
+            guard let uuid = readKey("D\(index)UI").flatMap(decodeUUID), !uuid.isEmpty else { continue }
             channels.append(RawSMCPortPower(
                 channel: index,
-                present: (readUInt8("D\(index)PR") ?? 0) >= 1,
-                volts: Double(readFloat("D\(index)JV") ?? 0),
-                amps: Double(readFloat("D\(index)JI") ?? 0),
+                present: (readKey("D\(index)PR")?.first ?? 0) >= 1,
+                volts: Double(readKey("D\(index)JV").flatMap(decodeFloat) ?? 0),
+                amps: Double(readKey("D\(index)JI").flatMap(decodeFloat) ?? 0),
                 uuid: uuid
             ))
         }
@@ -143,18 +151,26 @@ public final class SMCPowerReader: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard openLocked() else { return [] }
+        return Self.buildPortContracts(readKey: { self.readKey($0) })
+    }
+
+    // The contract rules, given a way to read a key's bytes. Same seam as
+    // buildPortPowerChannels, and the reason the two cannot share a decoder:
+    // these keys are big-endian integers while the power ones next door are
+    // native little-endian floats.
+    static func buildPortContracts(readKey: (String) -> [UInt8]?) -> [RawSMCPortContract] {
         var contracts: [RawSMCPortContract] = []
         for index in 1...4 {
-            guard let uuid = readUUID("D\(index)UI"), !uuid.isEmpty else { continue }
-            let powerMW = readBigEndianInt("D\(index)MP") ?? 0
+            guard let uuid = readKey("D\(index)UI").flatMap(decodeUUID), !uuid.isEmpty else { continue }
+            let powerMW = readKey("D\(index)MP").flatMap(decodeBigEndianInt) ?? 0
             guard powerMW > 0 else { continue }
             contracts.append(RawSMCPortContract(
                 channel: index,
                 uuid: uuid,
                 powerMW: powerMW,
-                voltageMV: readBigEndianInt("D\(index)MV") ?? 0,
-                currentMA: readBigEndianInt("D\(index)MI") ?? 0,
-                label: readString("D\(index)DE") ?? ""
+                voltageMV: readKey("D\(index)MV").flatMap(decodeBigEndianInt) ?? 0,
+                currentMA: readKey("D\(index)MI").flatMap(decodeBigEndianInt) ?? 0,
+                label: readKey("D\(index)DE").map(decodeString) ?? ""
             ))
         }
         return contracts
@@ -223,6 +239,10 @@ public final class SMCPowerReader: @unchecked Sendable {
     // `ch8*` keys (DxDE): a fixed-width NUL-padded label.
     private func readString(_ key: String) -> String? {
         guard let bytes = readKey(key) else { return nil }
+        return Self.decodeString(bytes)
+    }
+
+    static func decodeString(_ bytes: [UInt8]) -> String {
         let trimmed = Array(bytes.prefix { $0 != 0 })
         guard !trimmed.isEmpty else { return "" }
         return String(decoding: trimmed, as: UTF8.self)
@@ -237,9 +257,14 @@ public final class SMCPowerReader: @unchecked Sendable {
     // dash-stripped lowercase HPM UUID. A channel with no controller reads
     // all-zero; treat that as absent. Internal for testing.
     func readUUID(_ key: String) -> String? {
-        guard let bytes = readKey(key), !bytes.isEmpty else { return nil }
+        guard let bytes = readKey(key) else { return nil }
+        return Self.decodeUUID(bytes)
+    }
+
+    static func decodeUUID(_ bytes: [UInt8]) -> String? {
+        guard !bytes.isEmpty else { return nil }
         guard bytes.contains(where: { $0 != 0 }) else { return nil }
-        return Self.hexString(bytes)
+        return hexString(bytes)
     }
 
     static func hexString(_ bytes: [UInt8]) -> String {

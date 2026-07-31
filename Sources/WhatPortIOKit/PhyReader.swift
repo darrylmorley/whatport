@@ -38,8 +38,6 @@ public enum PhyReader {
         withMatchingServices(className: "AppleTypeCPhy") { service in
             guard let props = ioProperties(service) else { return }
 
-            let phyID = ioInt(props["AppleTypeCPhyID"])
-
             // Read port-number from the parent atc-phy device tree node.
             // This is the direct hardware mapping from PHY controller to
             // physical USB-C port. It's more reliable than positional mapping
@@ -47,42 +45,51 @@ public enum PhyReader {
             // (e.g. M4 Pro has 4 PHYs for 3 ports).
             let portNumber = ioDataInt(ioParentProperty(service, key: "port-number")) ?? 0
 
-            // Lane data is nested: "AppleTypeCPhyLane" -> "Lane 0" -> "Transport"
-            let lanes = ioDictionary(props["AppleTypeCPhyLane"])
-            let lane0 = ioDictionary(lanes["Lane 0"])
-            let lane1 = ioDictionary(lanes["Lane 1"])
-
-            // USB2 is a separate sub-dictionary
-            let usb2 = ioDictionary(props["AppleTypeCPhyUSB2"])
-
-            // DisplayPort pixel clock info. Nested under "PCLK 0", "PCLK 1", etc.
-            // Each sub-dict has "Link Rate" = "5.40Gbps/lane (HBR2)".
-            // Grab the first one we find.
-            let dpPclk = ioDictionary(props["AppleTypeCPhyDisplayPortPclk"])
-            let dpLinkRate = firstNestedString(in: dpPclk, childPrefix: "PCLK", key: "Link Rate")
-
-            // DP tunnel info. Nested under "Tunnel 0", "Tunnel 1", etc.
-            let dpTunnelDict = ioDictionary(props["AppleTypeCPhyDisplayPortTunnel"])
-            let dpTunnel = firstNestedString(in: dpTunnelDict, childPrefix: "Tunnel", key: "Link Rate")
-
-            let data = RawPhyData(
-                phyID: phyID,
-                portNumber: portNumber,
-                lane0Transport: ioString(lane0["Transport"]),
-                lane0PowerLevel: ioString(lane0["Power Level"]),
-                lane0Client: ioString(lane0["Client"]),
-                lane1Transport: ioString(lane1["Transport"]),
-                lane1PowerLevel: ioString(lane1["Power Level"]),
-                lane1Client: ioString(lane1["Client"]),
-                usb2Transport: ioString(usb2["Transport"]),
-                usb2Client: ioString(usb2["Client"]),
-                dpLinkRate: dpLinkRate,
-                dpTunnel: dpTunnel
-            )
-            results.append(data)
+            results.append(parse(properties: props, portNumber: portNumber))
         }
 
         return results.sorted { $0.phyID < $1.phyID }
+    }
+
+    // The lane rules, given one PHY's properties and the physical port number
+    // the walk read from its parent. Split out from the registry walk so
+    // recorded properties from other Macs can be replayed through it.
+    //
+    // portNumber comes in rather than being read here because it lives on the
+    // parent node, not on the PHY.
+    static func parse(properties: [String: Any], portNumber: Int) -> RawPhyData {
+        // Lane data is nested: "AppleTypeCPhyLane" -> "Lane 0" -> "Transport"
+        let lanes = ioDictionary(properties["AppleTypeCPhyLane"])
+        let lane0 = ioDictionary(lanes["Lane 0"])
+        let lane1 = ioDictionary(lanes["Lane 1"])
+
+        // USB2 is a separate sub-dictionary
+        let usb2 = ioDictionary(properties["AppleTypeCPhyUSB2"])
+
+        // DisplayPort pixel clock info. Nested under "PCLK 0", "PCLK 1", etc.
+        // Each sub-dict has "Link Rate" = "5.40Gbps/lane (HBR2)".
+        // Grab the first one we find.
+        let dpPclk = ioDictionary(properties["AppleTypeCPhyDisplayPortPclk"])
+        let dpLinkRate = firstNestedString(in: dpPclk, childPrefix: "PCLK", key: "Link Rate")
+
+        // DP tunnel info. Nested under "Tunnel 0", "Tunnel 1", etc.
+        let dpTunnelDict = ioDictionary(properties["AppleTypeCPhyDisplayPortTunnel"])
+        let dpTunnel = firstNestedString(in: dpTunnelDict, childPrefix: "Tunnel", key: "Link Rate")
+
+        return RawPhyData(
+            phyID: ioInt(properties["AppleTypeCPhyID"]),
+            portNumber: portNumber,
+            lane0Transport: ioString(lane0["Transport"]),
+            lane0PowerLevel: ioString(lane0["Power Level"]),
+            lane0Client: ioString(lane0["Client"]),
+            lane1Transport: ioString(lane1["Transport"]),
+            lane1PowerLevel: ioString(lane1["Power Level"]),
+            lane1Client: ioString(lane1["Client"]),
+            usb2Transport: ioString(usb2["Transport"]),
+            usb2Client: ioString(usb2["Client"]),
+            dpLinkRate: dpLinkRate,
+            dpTunnel: dpTunnel
+        )
     }
 
     // IOKit nests DP data under numbered keys: "PCLK 0", "PCLK 1", etc.

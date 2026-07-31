@@ -39,30 +39,38 @@ public enum ThunderboltReader {
 
         withMatchingServices(className: "IOThunderboltPort") { service in
             guard let props = ioProperties(service) else { return }
-
-            let desc = ioString(props["Description"])
-
-            // Only keep "Thunderbolt Port" adapters. These have Socket ID
-            // and represent physical USB-C ports.
-            guard desc == "Thunderbolt Port" else { return }
-
-            let data = RawThunderboltData(
-                socketID: ioString(props["Socket ID"]),
-                portNumber: ioInt(props["Port Number"]),
-                currentLinkWidth: ioInt(props["Current Link Width"]),
-                currentLinkSpeed: ioInt(props["Current Link Speed"]),
-                supportedLinkWidth: ioInt(props["Supported Link Width"]),
-                supportedLinkSpeed: ioInt(props["Supported Link Speed"]),
-                targetLinkWidth: ioInt(props["Target Link Width"]),
-                targetLinkSpeed: ioInt(props["Target Link Speed"]),
-                linkBandwidth: ioInt(props["Link Bandwidth"]),
-                description: desc,
-                thunderboltVersion: ioInt(props["Thunderbolt Version"]),
-                dualLinkPort: ioInt(props["Dual-Link Port"])
-            )
+            guard let data = parse(properties: props) else { return }
             results.append(data)
         }
 
         return results
+    }
+
+    // The adapter rules, given one service's properties. Split out from the
+    // registry walk so recorded properties from other Macs can be replayed
+    // through it; the walk above is then only responsible for finding services.
+    //
+    // Returns nil for an adapter that is not a physical port.
+    static func parse(properties: [String: Any]) -> RawThunderboltData? {
+        let desc = ioString(properties["Description"])
+
+        // Only keep "Thunderbolt Port" adapters. These have Socket ID
+        // and represent physical USB-C ports.
+        guard desc == "Thunderbolt Port" else { return nil }
+
+        return RawThunderboltData(
+            socketID: ioString(properties["Socket ID"]),
+            portNumber: ioInt(properties["Port Number"]),
+            currentLinkWidth: ioInt(properties["Current Link Width"]),
+            currentLinkSpeed: ioInt(properties["Current Link Speed"]),
+            supportedLinkWidth: ioInt(properties["Supported Link Width"]),
+            supportedLinkSpeed: ioInt(properties["Supported Link Speed"]),
+            targetLinkWidth: ioInt(properties["Target Link Width"]),
+            targetLinkSpeed: ioInt(properties["Target Link Speed"]),
+            linkBandwidth: ioInt(properties["Link Bandwidth"]),
+            description: desc,
+            thunderboltVersion: ioInt(properties["Thunderbolt Version"]),
+            dualLinkPort: ioInt(properties["Dual-Link Port"])
+        )
     }
 }

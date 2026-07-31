@@ -50,71 +50,100 @@ public struct RawHPMPort: Sendable {
 
 public enum HPMReader {
     public static func readAll() -> [RawHPMPort] {
-        var results: [RawHPMPort] = []
-        var seen = Set<String>()  // dedup by "portType:portNumber"
+        var parsed: [RawHPMPort] = []
 
         withMatchingServices(className: "IOAccessoryManager") { service in
-            guard let name = ioEntryName(service), name.hasPrefix("Port-") else { return }
+            guard let properties = ioProperties(service) else { return }
 
-            // Real physical ports report a USB-C or MagSafe port type. This is
-            // what excludes the HDMI and Inductive nodes that a few machines
-            // publish under the same base class.
-            let portType = ioString(ioProperty(service, key: "PortTypeDescription"))
-            let isRealPort = portType == "USB-C" || portType.hasPrefix("MagSafe")
-            guard isRealPort else { return }
+            // The "@N" number is the location in the service plane, not part of
+            // the registry name (the name is just "Port-USB-C"), and the UUID
+            // lives on the HPM controller ancestor. Both are gathered here
+            // because they are outside this service's own properties.
+            let port = parse(
+                properties: properties,
+                entryName: ioEntryName(service),
+                portNumber: ioLocationInPlaneInt(service),
+                controllerUUID: ioHPMControllerUUID(service)
+            )
+            guard let port else { return }
+            parsed.append(port)
+        }
 
-            // Reject a port that says it is not built into this Mac. Note the
-            // shape: only an explicit "false" rejects. Every port node in the
-            // corpus publishes BuiltIn = true (2685 of 2685), but treating a
-            // missing key as "not built in" would empty the roster on any
-            // machine that stopped publishing it, which is the one failure this
-            // reader must never have.
-            if let builtIn = ioProperty(service, key: "BuiltIn"), !ioBool(builtIn) { return }
+        return roster(from: parsed)
+    }
 
-            // The "@N" number is the location in the service plane, not
-            // part of the registry name (the name is just "Port-USB-C").
-            guard let portNumber = ioLocationInPlaneInt(service) else { return }
+    // Turns parsed ports into the roster: one entry per physical connector, in
+    // a stable order.
+    //
+    // Separate from the walk so the corpus sweeps exercise the same
+    // deduplication the app runs. They replay parse per recorded service, and
+    // while this lived inside the walk they could not reach it at all: with
+    // dedup disabled entirely, every sweep stayed green.
+    static func roster(from ports: [RawHPMPort]) -> [RawHPMPort] {
+        var seen = Set<String>()  // dedup by "portType:portNumber"
+        var deduped: [RawHPMPort] = []
 
-            // The UUID lives on the HPM controller ancestor, not here.
-            guard let uuid = ioHPMControllerUUID(service), !uuid.isEmpty else { return }
-
-            let key = "\(portType):\(portNumber)"
-            guard !seen.contains(key) else { return }
+        for port in ports {
+            let key = "\(port.portType):\(port.portNumber)"
+            guard !seen.contains(key) else { continue }
             seen.insert(key)
-
-            let overcurrentCount = ioInt(ioProperty(service, key: "Overcurrent Count"))
-            let plugEventCount = ioInt(ioProperty(service, key: "Plug Event Count"))
-            let connectionCount = ioInt(ioProperty(service, key: "ConnectionCount"))
-            let authorizationStatus = ioString(ioProperty(service, key: "UserAuthorizationStatusDescription"))
-            let ldcmStatus = ioString(ioProperty(service, key: "LDCM_MeasurementStatusDescription"))
-            let provisioned = ioStringArray(ioProperty(service, key: "TransportsProvisioned"))
-            let unauthorized = ioStringArray(ioProperty(service, key: "TransportsUnauthorized"))
-            let liquidDetected = ioBool(ioProperty(service, key: "LDCM_LiquidDetected"))
-            let mitigationsActive = ioBool(ioProperty(service, key: "LDCM_MitigationsEnabled"))
-
-            results.append(RawHPMPort(
-                uuid: uuid,
-                portNumber: portNumber,
-                portType: portType,
-                serviceName: name,
-                overcurrentCount: overcurrentCount,
-                plugEventCount: plugEventCount,
-                connectionCount: connectionCount,
-                authorizationStatus: authorizationStatus,
-                ldcmStatus: ldcmStatus,
-                provisionedTransports: provisioned,
-                unauthorizedTransports: unauthorized,
-                liquidDetected: liquidDetected,
-                mitigationsActive: mitigationsActive
-            ))
+            deduped.append(port)
         }
 
         // Sorted on port number and then type, because MagSafe and USB-C can
         // share a number. Sorting on the number alone leaves their relative
-        // order to sort's own discretion, and the input is now in registry
+        // order to sort's own discretion, and the input arrives in registry
         // order rather than a fixed sequence of class matches.
-        return results.sorted {
+        return deduped.sorted {
             ($0.portNumber, $0.portType) < ($1.portNumber, $1.portType)
         }
+    }
+
+    // The port rules, given one service's properties plus the three values the
+    // walk had to gather from elsewhere. Split out from the registry walk so
+    // recorded properties from other Macs can be replayed through it.
+    //
+    // Returns nil for anything that is not a physical port on this Mac.
+    static func parse(
+        properties: [String: Any],
+        entryName: String?,
+        portNumber: Int?,
+        controllerUUID: String?
+    ) -> RawHPMPort? {
+        guard let name = entryName, name.hasPrefix("Port-") else { return nil }
+
+        // Real physical ports report a USB-C or MagSafe port type. This is
+        // what excludes the HDMI and Inductive nodes that a few machines
+        // publish under the same base class.
+        let portType = ioString(properties["PortTypeDescription"])
+        let isRealPort = portType == "USB-C" || portType.hasPrefix("MagSafe")
+        guard isRealPort else { return nil }
+
+        // Reject a port that says it is not built into this Mac. Note the
+        // shape: only an explicit "false" rejects. Every port node in the
+        // corpus publishes BuiltIn = true (2685 of 2685), but treating a
+        // missing key as "not built in" would empty the roster on any
+        // machine that stopped publishing it, which is the one failure this
+        // reader must never have.
+        if let builtIn = properties["BuiltIn"], !ioBool(builtIn) { return nil }
+
+        guard let portNumber else { return nil }
+        guard let uuid = controllerUUID, !uuid.isEmpty else { return nil }
+
+        return RawHPMPort(
+            uuid: uuid,
+            portNumber: portNumber,
+            portType: portType,
+            serviceName: name,
+            overcurrentCount: ioInt(properties["Overcurrent Count"]),
+            plugEventCount: ioInt(properties["Plug Event Count"]),
+            connectionCount: ioInt(properties["ConnectionCount"]),
+            authorizationStatus: ioString(properties["UserAuthorizationStatusDescription"]),
+            ldcmStatus: ioString(properties["LDCM_MeasurementStatusDescription"]),
+            provisionedTransports: ioStringArray(properties["TransportsProvisioned"]),
+            unauthorizedTransports: ioStringArray(properties["TransportsUnauthorized"]),
+            liquidDetected: ioBool(properties["LDCM_LiquidDetected"]),
+            mitigationsActive: ioBool(properties["LDCM_MitigationsEnabled"])
+        )
     }
 }
