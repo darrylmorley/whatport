@@ -1,3 +1,4 @@
+import IOKit
 import Testing
 @testable import WhatPortIOKit
 
@@ -53,6 +54,56 @@ import Testing
     // share the same "@N" number (the whole point of using them).
     let uuids = ports.map(\.uuid)
     #expect(Set(uuids).count == uuids.count, "HPM port UUIDs should be unique")
+}
+
+// The roster matches the base class IOAccessoryManager rather than naming the
+// chip-specific port-interface classes. This pins the assumption that makes that
+// safe: every concrete class present on this Mac must also answer to the base.
+// If a future macOS moves a port-interface class out from under it, the roster
+// would empty out silently, which is exactly the failure this change existed to
+// prevent, so it is worth catching in the suite rather than in the wild.
+@Test func portInterfaceClassesAnswerToTheBaseClass() {
+    // Every port-interface class seen across the probe corpus, plus the two
+    // non-port ones it also returns (HDMI, Inductive), which the reader filters
+    // out by port type rather than by class.
+    let knownConcreteClasses = [
+        "AppleHPMInterfaceType10",
+        "AppleHPMInterfaceType11",
+        "AppleHPMInterfaceType12",  // never observed, kept in case it ever is
+        "AppleHPMInterfaceType18",
+        "AppleTCControllerType10",
+        "AppleTCControllerType11",
+        "AppleDockConnectAIC",
+        "AppleTCControllerSingleTransport",
+    ]
+
+    // Compared by registry entry ID, which is the only unambiguous identity for
+    // a service. Comparing names would let two different services collapse to
+    // one key and hide exactly the gap this is looking for. No port-type
+    // filtering either: conformance is the property under test, and it should
+    // hold for every service of these classes, port or not.
+    func entryIDs(matching className: String) -> Set<UInt64> {
+        var found: Set<UInt64> = []
+        withMatchingServices(className: className) { service in
+            var entryID: UInt64 = 0
+            guard IORegistryEntryGetRegistryEntryID(service, &entryID) == KERN_SUCCESS else { return }
+            found.insert(entryID)
+        }
+        return found
+    }
+
+    let viaConcreteClasses = knownConcreteClasses.reduce(into: Set<UInt64>()) {
+        $0.formUnion(entryIDs(matching: $1))
+    }
+    let viaBaseClass = entryIDs(matching: "IOAccessoryManager")
+
+    // Both sets empty would pass the subset check vacuously, so require the
+    // base class to have found something first.
+    #expect(!viaBaseClass.isEmpty, "Expected IOAccessoryManager services on Apple Silicon")
+    #expect(!viaConcreteClasses.isEmpty, "Expected at least one known concrete class on this Mac")
+
+    let missing = viaConcreteClasses.subtracting(viaBaseClass)
+    #expect(missing.isEmpty, "Services the base class no longer reaches: \(missing.sorted())")
 }
 
 @Test func hpmReaderReturnsNonNegativeHealthCounters() {
