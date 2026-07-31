@@ -26,6 +26,29 @@ public struct RawSMCPortPower: Sendable {
     public var watts: Double { volts * amps }
 }
 
+// The negotiated charging contract as the SMC reports it, per channel.
+//
+// Distinct from RawSMCPortPower, which is power the Mac is sourcing OUT of a
+// port. This is the contract for power coming IN, and on M1 Pro / Max / Ultra
+// it is the only place that contract exists: those machines never publish a
+// USB-C IOPortFeaturePowerSource node, so ChargerReader finds nothing and the
+// port shows no power at all while the Mac charges at 100 W.
+//
+// The integer keys are BIG-endian. The float keys on the same channel (DxJV,
+// DxJI) are native little-endian, so the two cannot share a decoder. That is
+// not a subtle failure: 20000 mV read the wrong way round is 553,648,128.
+public struct RawSMCPortContract: Sendable {
+    public let channel: Int       // SMC D-index (1..4), NOT the physical port
+    public let uuid: String       // DxUI, 32-char lowercase hex (join key)
+    public let powerMW: Int       // DxMP, contract power in milliwatts
+    public let voltageMV: Int     // DxMV, contract voltage in millivolts
+    public let currentMA: Int     // DxMI, contract current in milliamps
+    // DxDE, the channel label. Often empty even on a genuine 20 V charger, so
+    // its absence proves nothing. Useful only for spotting a channel that is
+    // sourcing power outward ("usb host") rather than receiving it.
+    public let label: String
+}
+
 // System DC-in (wall / charger) power from the SMC rails. Live (~1 Hz), unlike
 // AppleSmartBattery.SystemPowerIn which freezes under load on Apple Silicon.
 public struct RawSMCSystemPower: Sendable {
@@ -105,6 +128,38 @@ public final class SMCPowerReader: @unchecked Sendable {
         return channels
     }
 
+    // Reads the negotiated charging contract on channels D1..D4.
+    //
+    // A channel is only returned when it has a usable DxUI (without it nothing
+    // can be tied to a port) and a positive power figure. Returns [] when the
+    // SMC can't be opened or the keys are absent, which includes every desktop:
+    // DxMP / DxMV / DxMI are missing on all 83 desktops in the WhatCable probe
+    // corpus while the power-OUT keys next door are present and working.
+    //
+    // Callers should only reach for this when the Mac is actually taking power
+    // in. Each channel costs up to four kernel round trips, and on a machine
+    // that already publishes the power-source node they buy nothing.
+    public func readPortContracts() -> [RawSMCPortContract] {
+        lock.lock()
+        defer { lock.unlock() }
+        guard openLocked() else { return [] }
+        var contracts: [RawSMCPortContract] = []
+        for index in 1...4 {
+            guard let uuid = readUUID("D\(index)UI"), !uuid.isEmpty else { continue }
+            let powerMW = readBigEndianInt("D\(index)MP") ?? 0
+            guard powerMW > 0 else { continue }
+            contracts.append(RawSMCPortContract(
+                channel: index,
+                uuid: uuid,
+                powerMW: powerMW,
+                voltageMV: readBigEndianInt("D\(index)MV") ?? 0,
+                currentMA: readBigEndianInt("D\(index)MI") ?? 0,
+                label: readString("D\(index)DE") ?? ""
+            ))
+        }
+        return contracts
+    }
+
     // Reads system DC-in power from the SMC rails VD0R (volts), ID0R (amps) and
     // PDTR (watts). Returns nil when neither the voltage nor the current rail is
     // present, so the caller can fall back to the battery telemetry. PDTR is the
@@ -142,6 +197,35 @@ public final class SMCPowerReader: @unchecked Sendable {
         let bits = UInt32(bytes[0]) | UInt32(bytes[1]) << 8 | UInt32(bytes[2]) << 16 | UInt32(bytes[3]) << 24
         let value = Float(bitPattern: bits)
         return value.isFinite ? value : nil
+    }
+
+    // Integer keys (DxMP is ui32, DxMV / DxMI are ui16): BIG-endian, unlike the
+    // float keys in the same channel, which are native little-endian. The float
+    // decoder sits a few lines up and is the obvious thing to reach for, which
+    // is why this says so. Internal for testing without SMC hardware.
+    // Accumulates into UInt64 and converts once at the end. Accumulating
+    // straight into Int does not trap (Swift's << discards the overflow bits)
+    // but silently yields a negative number for any 8-byte payload with the top
+    // bit set: 0xFF...FF reads as -1 rather than nil. The keys we read are ui16
+    // and ui32 so nothing exercises it today, and a wrong answer that looks like
+    // a real one is exactly what the rest of this file is careful about.
+    static func decodeBigEndianInt(_ bytes: [UInt8]) -> Int? {
+        guard !bytes.isEmpty, bytes.count <= 8 else { return nil }
+        let value = bytes.reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+        return Int(exactly: value)
+    }
+
+    private func readBigEndianInt(_ key: String) -> Int? {
+        guard let bytes = readKey(key) else { return nil }
+        return Self.decodeBigEndianInt(bytes)
+    }
+
+    // `ch8*` keys (DxDE): a fixed-width NUL-padded label.
+    private func readString(_ key: String) -> String? {
+        guard let bytes = readKey(key) else { return nil }
+        let trimmed = Array(bytes.prefix { $0 != 0 })
+        guard !trimmed.isEmpty else { return "" }
+        return String(decoding: trimmed, as: UTF8.self)
     }
 
     private func readUInt8(_ key: String) -> UInt8? {

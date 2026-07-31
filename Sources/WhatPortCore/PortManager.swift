@@ -64,7 +64,8 @@ public final class PortManager: @unchecked Sendable {
             usb3Transport: snapshot.usb3Transport,
             dpTransport: snapshot.dpTransport,
             cioTransport: snapshot.cioTransport,
-            smcPortPower: snapshot.smcPortPower
+            smcPortPower: snapshot.smcPortPower,
+            smcPortContracts: snapshot.smcPortContracts
         )
 
         // Flight Recorder: record before updating published state so the
@@ -130,6 +131,7 @@ public struct PortManagerSnapshot: Sendable {
     public let dpTransport: [DPTransportInput]
     public let cioTransport: [CIOTransportInput]
     public let smcPortPower: [SMCPortPowerInput]
+    public let smcPortContracts: [SMCPortContractInput]
 
     public init(
         timestamp: Date = .now,
@@ -148,7 +150,8 @@ public struct PortManagerSnapshot: Sendable {
         usb3Transport: [USB3TransportInput] = [],
         dpTransport: [DPTransportInput] = [],
         cioTransport: [CIOTransportInput] = [],
-        smcPortPower: [SMCPortPowerInput] = []
+        smcPortPower: [SMCPortPowerInput] = [],
+        smcPortContracts: [SMCPortContractInput] = []
     ) {
         self.timestamp = timestamp
         self.hpmPorts = hpmPorts
@@ -167,6 +170,7 @@ public struct PortManagerSnapshot: Sendable {
         self.dpTransport = dpTransport
         self.cioTransport = cioTransport
         self.smcPortPower = smcPortPower
+        self.smcPortContracts = smcPortContracts
     }
 }
 
@@ -360,22 +364,53 @@ public struct SMCPortPowerInput: Sendable {
 public struct ChargerInput: Sendable {
     public let portType: String   // "MagSafe 3", "USB-C", etc.
     public let portNumber: Int
-    public let maxWatts: Int      // milliwatts
+    public let maxWatts: Int      // milliwatts, 0 when the node carries no PDO
     public let voltage: Int       // millivolts
     public let maxCurrent: Int    // milliamps
+    // True when the PDO came from WinningPowerSourceOption (the contract the
+    // system selected) rather than the highest-PDO fallback.
+    public let hasWinningContract: Bool
 
     public init(
         portType: String,
         portNumber: Int,
         maxWatts: Int = 0,
         voltage: Int = 0,
-        maxCurrent: Int = 0
+        maxCurrent: Int = 0,
+        hasWinningContract: Bool = false
     ) {
         self.portType = portType
         self.portNumber = portNumber
         self.maxWatts = maxWatts
         self.voltage = voltage
         self.maxCurrent = maxCurrent
+        self.hasWinningContract = hasWinningContract
+    }
+}
+
+// One SMC charging contract channel (power IN), joined to a port by UUID.
+public struct SMCPortContractInput: Sendable {
+    public let channel: Int       // SMC D-index (1..4), NOT the physical port
+    public let uuid: String       // 32-char lowercase hex (normalised)
+    public let powerMW: Int
+    public let voltageMV: Int
+    public let currentMA: Int
+    public let label: String
+
+    public init(
+        channel: Int,
+        uuid: String,
+        powerMW: Int,
+        voltageMV: Int,
+        currentMA: Int,
+        label: String = ""
+    ) {
+        self.channel = channel
+        self.uuid = uuid
+        self.powerMW = powerMW
+        self.voltageMV = voltageMV
+        self.currentMA = currentMA
+        self.label = label
     }
 }
 
@@ -661,7 +696,8 @@ extension PortManager {
         usb3Transport: [USB3TransportInput] = [],
         dpTransport: [DPTransportInput] = [],
         cioTransport: [CIOTransportInput] = [],
-        smcPortPower: [SMCPortPowerInput] = []
+        smcPortPower: [SMCPortPowerInput] = [],
+        smcPortContracts: [SMCPortContractInput] = []
     ) -> [PortState] {
         // Deduplicate TB data by socket ID (multiple adapters per port, take best)
         let tbBySocket = bestTBPerSocket(tbData)
@@ -756,6 +792,18 @@ extension PortManager {
         var nonUSBC = buildNonUSBCPorts(nonUSBCCC, chargerData: chargerData, chargingPower: chargingPower)
         stampMagSafeHPMData(&nonUSBC, hpmPorts: hpmPorts)
         results.append(contentsOf: nonUSBC)
+
+        // Charging contract from the SMC, for the machines where macOS never
+        // publishes the USB-C power-source node the charger path above reads
+        // (M1 Pro / Max / Ultra). Runs after MagSafe ports are built because
+        // one of its gates is "no port is already showing incoming power", and
+        // a MagSafe port that is genuinely charging must be able to trip it.
+        applySMCContract(
+            to: &results,
+            smcPortContracts: smcPortContracts,
+            chargerData: chargerData,
+            chargingPower: chargingPower
+        )
 
         // Per-port power-OUT: join SMC channels to ports by UUID. The SMC is the
         // primary source (live ~1 Hz; PowerOutDetails freezes under load), so it
@@ -1009,9 +1057,14 @@ extension PortManager {
         chargerData: [ChargerInput],
         chargingPower: ChargingPowerInput?
     ) {
+        // maxWatts > 0 is what makes this a contract rather than a bare node.
+        // ChargerReader reports nodes carrying no PDO too, so that the SMC
+        // fallback below can tell "macOS published nothing here" apart from
+        // "macOS published a node that has not settled yet"; those bare entries
+        // must never reach the attribution here.
         let usbcChargers = Dictionary(
             chargerData
-                .filter { $0.portType == "USB-C" && $0.portNumber > 0 }
+                .filter { $0.portType == "USB-C" && $0.portNumber > 0 && $0.maxWatts > 0 }
                 .map { ($0.portNumber, $0) },
             uniquingKeysWith: { first, _ in first }
         )
@@ -1031,6 +1084,44 @@ extension PortManager {
                 direction: .incoming
             )
         }
+    }
+
+    // Attach a charging contract read from the SMC to the one port it resolves
+    // to. This only ever fires on machines where macOS published no USB-C
+    // power-source node at all: see SMCContractAttribution for the gates and
+    // the corpus evidence behind the join.
+    //
+    // The contract supplies the negotiated volts and amps; the live draw still
+    // comes from the same system telemetry the real-node path uses, so a port
+    // fixed up here reads identically to one macOS described itself.
+    private func applySMCContract(
+        to results: inout [PortState],
+        smcPortContracts: [SMCPortContractInput],
+        chargerData: [ChargerInput],
+        chargingPower: ChargingPowerInput?
+    ) {
+        guard !smcPortContracts.isEmpty else { return }
+
+        guard let resolved = SMCContractAttribution.resolve(
+            contracts: smcPortContracts,
+            ports: results,
+            chargerNodes: chargerData,
+            // chargingPower is non-nil only when a charger is connected: the
+            // reader gates on ExternalConnected.
+            externalConnected: chargingPower != nil
+        ) else { return }
+
+        guard let index = results.firstIndex(where: { $0.id == resolved.portID }) else { return }
+
+        results[index].power = PortPower(
+            watts: Double(chargingPower?.systemPowerIn ?? 0) / 1000.0,
+            current: chargingPower?.systemCurrentIn ?? 0,
+            voltage: chargingPower?.systemVoltageIn ?? resolved.contract.voltageMV,
+            configuredVoltage: resolved.contract.voltageMV,
+            configuredCurrent: resolved.contract.currentMA,
+            vconnCurrent: 0,
+            direction: .incoming
+        )
     }
 
     // Join SMC per-port power-OUT channels to ports by UUID. The SMC is the
@@ -1096,10 +1187,10 @@ extension PortManager {
         }
     }
 
-    // Normalise an HPM UUID to match the SMC DxUI form: dashes stripped,
-    // lowercase (e.g. "6230AF2D-EE59-..." -> "6230af2dee59...").
+    // Normalise an HPM UUID to match the SMC DxUI form. One implementation,
+    // shared with the contract path, so the two joins cannot drift apart.
     private func normalisedUUID(_ uuid: String) -> String {
-        uuid.replacingOccurrences(of: "-", with: "").lowercased()
+        SMCContractAttribution.normalisedUUID(uuid)
     }
 
     // Stamp the stable HPM UUID and health data onto non-USB-C ports (MagSafe).

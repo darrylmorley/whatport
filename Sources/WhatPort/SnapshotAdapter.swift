@@ -70,15 +70,7 @@ enum SnapshotAdapter {
                     cablePDRevision: cc.cablePDRevision
                 )
             },
-            chargerData: snapshot.chargerData.map { c in
-                ChargerInput(
-                    portType: c.portType,
-                    portNumber: c.portNumber,
-                    maxWatts: c.maxWatts,
-                    voltage: c.voltage,
-                    maxCurrent: c.maxCurrent
-                )
-            },
+            chargerData: snapshot.chargerData.map { $0.toChargerInput() },
             chargingPower: snapshot.chargingPower.map { cp in
                 ChargingPowerInput(
                     systemPowerIn: cp.systemPowerIn,
@@ -171,6 +163,16 @@ enum SnapshotAdapter {
                     volts: s.volts,
                     amps: s.amps,
                     uuid: s.uuid
+                )
+            },
+            smcPortContracts: snapshot.smcPortContracts.map { c in
+                SMCPortContractInput(
+                    channel: c.channel,
+                    uuid: c.uuid,
+                    powerMW: c.powerMW,
+                    voltageMV: c.voltageMV,
+                    currentMA: c.currentMA,
+                    label: c.label
                 )
             }
         )

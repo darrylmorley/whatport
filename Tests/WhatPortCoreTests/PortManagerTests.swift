@@ -437,7 +437,7 @@ import Testing
         hpmPorts: [HPMPortInput(uuid: uuid, portNumber: 1, portType: "USB-C")],
         phyData: [PhyInput(phyID: 0, portNumber: 1)],
         ccData: [CCInput(portNumber: 1, portType: "USB-C", active: true)],
-        chargerData: [ChargerInput(portType: "USB-C", portNumber: 1, voltage: 20000, maxCurrent: 5000)],
+        chargerData: [ChargerInput(portType: "USB-C", portNumber: 1, maxWatts: 100000, voltage: 20000, maxCurrent: 5000, hasWinningContract: true)],
         chargingPower: ChargingPowerInput(systemPowerIn: 60000, systemVoltageIn: 20000,
                                           systemCurrentIn: 3000, isCharging: true),
         smcPortPower: [
@@ -643,7 +643,7 @@ import Testing
         phyData: [PhyInput(phyID: 0, portNumber: 1)],
         tbData: [ThunderboltInput(socketID: 1)],
         ccData: [CCInput(portNumber: 1, portType: "USB-C", active: true)],
-        chargerData: [ChargerInput(portType: "USB-C", portNumber: 1, voltage: 20000, maxCurrent: 5000)],
+        chargerData: [ChargerInput(portType: "USB-C", portNumber: 1, maxWatts: 100000, voltage: 20000, maxCurrent: 5000, hasWinningContract: true)],
         chargingPower: ChargingPowerInput(systemPowerIn: 60000, systemVoltageIn: 20000,
                                           systemCurrentIn: 3000, isCharging: true),
         chargerIdentity: ChargerIdentityInput(

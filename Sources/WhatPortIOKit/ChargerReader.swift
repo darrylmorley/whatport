@@ -1,5 +1,6 @@
 import Foundation
 import IOKit
+import WhatPortCore
 
 // Reads the negotiated USB-PD power contract from IOPortFeaturePowerSource.
 //
@@ -18,9 +19,26 @@ import IOKit
 public struct RawChargerData: Sendable {
     public let portType: String   // "MagSafe 3", "USB-C", etc.
     public let portNumber: Int
-    public let maxWatts: Int      // milliwatts
+    public let maxWatts: Int      // milliwatts, 0 when the node carries no PDO
     public let voltage: Int       // millivolts
     public let maxCurrent: Int    // milliamps
+    // True when the PDO came from WinningPowerSourceOption (the contract the
+    // system actually selected) rather than the highest-PDO fallback.
+    public let hasWinningContract: Bool
+
+    // The domain-layer form. One conversion, used by the snapshot adapter and
+    // by the SMC contract read gate, so neither can describe a charger node
+    // differently from the other.
+    public func toChargerInput() -> ChargerInput {
+        ChargerInput(
+            portType: portType,
+            portNumber: portNumber,
+            maxWatts: maxWatts,
+            voltage: voltage,
+            maxCurrent: maxCurrent,
+            hasWinningContract: hasWinningContract
+        )
+    }
 }
 
 public enum ChargerReader {
@@ -38,8 +56,9 @@ public enum ChargerReader {
             let portNumber = ioInt(props["ParentBuiltInPortNumber"])
 
             // Try WinningPowerSourceOption first (the PDO the system selected).
-            // USB-C ports have this, MagSafe does not.
+            // USB-C ports have this, MagSafe does not always.
             var pdo = ioDictionary(props["WinningPowerSourceOption"])
+            let hasWinningContract = !pdo.isEmpty
 
             // Fallback: pick the highest-power PDO from PowerSourceOptions.
             // MagSafe exposes the array of available PDOs but not which one
@@ -49,20 +68,21 @@ public enum ChargerReader {
                 pdo = highestPDO(from: ioArray(props["PowerSourceOptions"]))
             }
 
-            guard !pdo.isEmpty else { return }
-
             let maxWatts = ioInt(pdo["Max Power (mW)"])
-            let voltage = ioInt(pdo["Voltage (mV)"])
-            let maxCurrent = ioInt(pdo["Max Current (mA)"])
 
-            guard maxWatts > 0 else { return }
-
+            // A node with no usable PDO is still reported, with maxWatts 0.
+            // Callers that attribute power filter on maxWatts > 0; the reason
+            // this entry exists at all is that "macOS published a node here"
+            // and "macOS published nothing here" are different facts, and the
+            // SMC contract fallback (which only fires when macOS published
+            // nothing) cannot tell them apart otherwise.
             results.append(RawChargerData(
                 portType: portType,
                 portNumber: portNumber,
                 maxWatts: maxWatts,
-                voltage: voltage,
-                maxCurrent: maxCurrent
+                voltage: ioInt(pdo["Voltage (mV)"]),
+                maxCurrent: ioInt(pdo["Max Current (mA)"]),
+                hasWinningContract: hasWinningContract && maxWatts > 0
             ))
         }
 

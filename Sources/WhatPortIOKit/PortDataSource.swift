@@ -32,6 +32,9 @@ public struct PortSnapshot: Sendable {
     public let cioTransport: [RawCIOTransportState]
     // SMC per-port power-OUT channels (desktop power path), joined by UUID.
     public let smcPortPower: [RawSMCPortPower]
+    // SMC per-port charging contracts (power IN), joined by the same UUID.
+    // Only read while a charger is attached; empty otherwise.
+    public let smcPortContracts: [RawSMCPortContract]
 
     public init(
         timestamp: Date = .now,
@@ -50,7 +53,8 @@ public struct PortSnapshot: Sendable {
         usb3Transport: [RawUSB3TransportState] = [],
         dpTransport: [RawDPTransportState] = [],
         cioTransport: [RawCIOTransportState] = [],
-        smcPortPower: [RawSMCPortPower] = []
+        smcPortPower: [RawSMCPortPower] = [],
+        smcPortContracts: [RawSMCPortContract] = []
     ) {
         self.timestamp = timestamp
         self.hpmPorts = hpmPorts
@@ -69,6 +73,7 @@ public struct PortSnapshot: Sendable {
         self.dpTransport = dpTransport
         self.cioTransport = cioTransport
         self.smcPortPower = smcPortPower
+        self.smcPortContracts = smcPortContracts
     }
 }
 
@@ -102,6 +107,27 @@ public enum SnapshotReader {
         let powerMeteringAvailable =
             PowerReader.isPowerMeteringAvailable() || !smcPortPower.isEmpty
 
+        let chargerData = ChargerReader.readAll()
+
+        // Per-port charging contracts, for the machines where macOS publishes
+        // no USB-C power-source node (M1 Pro / Max / Ultra).
+        //
+        // Two gates, because this read is not cheap: each populated channel
+        // costs five key reads, and every key read is two driver calls (size
+        // and type first, then the value), so a fully populated four-channel
+        // machine pays 40 round trips every second. A charger must be attached
+        // (chargingPower is non-nil only then), AND macOS must not already be
+        // describing the charge itself.
+        //
+        // The second condition calls the same function the attribution layer
+        // uses rather than restating it, so this cannot end up reading data
+        // that layer is certain to throw away.
+        let smcPortContracts = (chargingPower == nil
+            || SMCContractAttribution.macOSDescribesCharging(
+                chargerNodes: chargerData.map { $0.toChargerInput() }))
+            ? []
+            : smc.readPortContracts()
+
         return PortSnapshot(
             timestamp: .now,
             hpmPorts: HPMReader.readAll(),
@@ -109,7 +135,7 @@ public enum SnapshotReader {
             thunderboltData: ThunderboltReader.readAll(),
             powerData: PowerReader.readAll(),
             ccData: CCReader.readAll(),
-            chargerData: ChargerReader.readAll(),
+            chargerData: chargerData,
             chargingPower: chargingPower,
             chargerIdentity: PowerReader.readChargerIdentity(),
             deviceData: DeviceReader.readUSBDevices(),
@@ -119,7 +145,8 @@ public enum SnapshotReader {
             usb3Transport: TransportStateReader.readUSB3(),
             dpTransport: TransportStateReader.readDisplayPort(),
             cioTransport: TransportStateReader.readCIO(),
-            smcPortPower: smcPortPower
+            smcPortPower: smcPortPower,
+            smcPortContracts: smcPortContracts
         )
     }
 
