@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#2563eb">
+    <title>WhatPort Pro: Terms and Conditions</title>
+    <meta name="description" content="Terms and conditions for buying and using WhatPort Pro, the Flight Recorder upgrade for WhatPort.">
+
+    <link rel="canonical" href="https://www.whatport.app/terms.html">
+    <link rel="icon" href="icon.png" type="image/png">
+    <link rel="apple-touch-icon" href="icon.png">
+
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="WhatPort">
+    <meta property="og:url" content="https://www.whatport.app/terms.html">
+    <meta property="og:title" content="WhatPort Pro: Terms and Conditions">
+    <meta property="og:description" content="Terms and conditions for buying and using WhatPort Pro.">
+    <meta property="og:image" content="https://www.whatport.app/og-card.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="WhatPort Pro: Terms and Conditions">
+    <meta name="twitter:description" content="Terms and conditions for buying and using WhatPort Pro.">
+    <meta name="twitter:image" content="https://www.whatport.app/og-card.png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #0e1620;
+        --ink-soft: #364152;
+        --muted: #6a7585;
+        --line: #e3e8ef;
+        --line-soft: #eef2f7;
+        --bg: #fafbfc;
+        --panel: #ffffff;
+        --accent: #2563eb;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 16px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      main { flex: 1 0 auto; padding: 48px 0 80px; }
+      footer { flex-shrink: 0; }
+
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      img { display: block; max-width: 100%; }
+
+      code {
+        background: var(--line-soft);
+        padding: 1px 6px;
+        border-radius: 5px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 0.9em;
+      }
+
+      .wrap { width: min(720px, calc(100% - 40px)); margin: 0 auto; }
+      .wrap-wide { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+
+      .nav {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: rgba(250, 251, 252, 0.85);
+        backdrop-filter: saturate(180%) blur(12px);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .nav-inner {
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 700;
+        font-size: 16px;
+        color: var(--ink);
+      }
+      .brand:hover { text-decoration: none; }
+
+      .mark {
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 28px;
+        font-size: 14px;
+        color: var(--ink-soft);
+      }
+      .nav-links a { color: inherit; }
+      .nav-links a:hover { color: var(--ink); text-decoration: none; }
+
+      .nav .button {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 14px;
+        min-height: 36px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--ink);
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1;
+      }
+      .nav .button:hover { border-color: #c8d0db; text-decoration: none; }
+
+      h1 {
+        font-size: 32px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        margin: 0 0 8px;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        font-size: 14px;
+        margin: 0 0 32px;
+      }
+
+      h2 {
+        font-size: 20px;
+        font-weight: 700;
+        margin: 32px 0 12px;
+        scroll-margin-top: 80px;
+      }
+
+      p { margin: 0 0 14px; color: var(--ink-soft); }
+      ul { margin: 0 0 14px; padding-left: 20px; color: var(--ink-soft); }
+      li { margin-bottom: 6px; }
+
+      hr {
+        border: none;
+        border-top: 1px solid var(--line);
+        margin: 32px 0;
+      }
+
+      .lede { font-size: 17px; }
+
+      footer {
+        padding: 32px 0;
+        background: #0c1219;
+        color: rgba(255, 255, 255, 0.55);
+        font-size: 13.5px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      footer .wrap-wide {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      footer a { color: rgba(255, 255, 255, 0.85); }
+      footer a:hover { color: #fff; }
+      footer .footer-links { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+      footer .footer-links .sep { color: rgba(255, 255, 255, 0.3); }
+
+      @media (max-width: 720px) {
+        .nav-links a:not(.button) { display: none; }
+        .nav-links { gap: 12px; }
+        h1 { font-size: 28px; }
+        footer .wrap-wide { flex-direction: column; align-items: flex-start; }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav" aria-label="Primary">
+      <div class="wrap-wide nav-inner">
+        <a class="brand" href="/">
+          <img class="mark" src="icon.png" alt="" aria-hidden="true" width="28" height="28">
+          <span>WhatPort</span>
+        </a>
+        <div class="nav-links">
+          <a href="/#features">Features</a>
+          <a href="/#pro">Pro</a>
+          <a href="/#install">Install</a>
+          <a class="button" href="https://github.com/darrylmorley/whatport">GitHub</a>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <div class="wrap">
+        <h1>WhatPort Pro Terms and Conditions</h1>
+        <p class="subtitle">Last updated: 31 July 2026</p>
+
+        <p class="lede">
+          These terms govern your purchase and use of WhatPort Pro. Please read them
+          before buying. By purchasing or activating a WhatPort Pro licence key, you
+          agree to them.
+        </p>
+        <p>
+          The free WhatPort app is covered separately by the MIT licence. See section 2.
+        </p>
+
+        <h2>1. Who you are contracting with</h2>
+        <p>
+          WhatPort Pro is sold by Bitmoor Ltd, a company registered in England and
+          Wales under company number 17133695, with its registered office at Unit
+          A478, 4-6 Greatorex Street, London, United Kingdom, E1 5NF.
+        </p>
+        <p>
+          In these terms, "we", "us" and "our" mean Bitmoor Ltd. "You" means the
+          person or organisation buying the licence. Contact us at
+          <a href="mailto:support@whatport.app">support@whatport.app</a>.
+        </p>
+
+        <h2>2. The free app is separate</h2>
+        <p>
+          The WhatPort app is open source and released under the MIT licence, the full
+          text of which is in the
+          <a href="https://github.com/darrylmorley/whatport/blob/main/LICENSE">public repository</a>.
+          That licence permits commercial use, modification and redistribution,
+          subject only to retaining the copyright notice.
+        </p>
+        <p>
+          Nothing in these terms restricts, replaces or adds conditions to your rights
+          under the MIT licence. These terms apply only to WhatPort Pro, the paid
+          upgrade.
+        </p>
+
+        <h2>3. What WhatPort Pro is</h2>
+        <p>
+          WhatPort Pro unlocks the Flight Recorder inside the same WhatPort app. It is
+          not a separate download. It requires macOS 14 (Sonoma) or later on an Apple
+          Silicon Mac. Intel Macs are not supported, because they do not publish the
+          port controller data the app reads.
+        </p>
+        <p>
+          The features included in Pro are described on the
+          <a href="/#pro">WhatPort Pro section of the website</a>. That description
+          reflects the product at the time of purchase.
+        </p>
+
+        <h2>4. Your licence</h2>
+        <p>
+          On payment we grant you a perpetual, non-exclusive licence to use WhatPort
+          Pro, subject to these terms. The licence may not be transferred without our
+          written consent, which we will not unreasonably withhold (see section 22).
+        </p>
+        <ul>
+          <li>One licence key may be activated on up to two Macs at any one time.</li>
+          <li>The licence is granted to the purchasing person or organisation, not to
+            a named individual. Where an organisation buys a key, any of its personnel
+            may use it within the two-Mac limit.</li>
+          <li>The licence is perpetual. Provided you comply with these terms, we will
+            not withdraw your right to use the version of Pro you bought.</li>
+          <li>If you replace a Mac and reach the activation limit, contact support and
+            we will reset it.</li>
+        </ul>
+
+        <h2>5. What you may not do</h2>
+        <p>
+          You may not resell, rent, sublicence or redistribute a WhatPort Pro licence
+          key, publish or share a key so that others can use it outside your
+          organisation, or circumvent, disable or tamper with licence activation.
+        </p>
+        <p>
+          You may not reverse engineer, decompile or disassemble the Pro components of
+          the software, except to the extent that this restriction may not be excluded
+          or limited by law. In particular, nothing here affects rights you have under
+          applicable law to decompile software to achieve interoperability.
+        </p>
+        <p>
+          For the avoidance of doubt, this restriction applies only to the
+          closed-source Pro components, which are proprietary to Bitmoor Ltd and are
+          not published in the public repository. Everything in that repository is MIT
+          licensed and is not restricted by this section.
+        </p>
+
+        <h2>6. Price and payment</h2>
+        <p>
+          WhatPort Pro costs £4.99 per licence key at the price shown on the website
+          when you buy. This is a one-time payment, not a subscription. Prices are in
+          pounds sterling.
+        </p>
+        <p>
+          Bitmoor Ltd is not registered for UK VAT. No UK VAT is charged on your
+          purchase and we cannot issue a UK VAT invoice. Your Stripe receipt is your
+          proof of purchase.
+        </p>
+        <p>
+          Payment is processed by Stripe. Your card details are handled by Stripe under
+          their own terms and privacy policy and never reach us. We can see the
+          transaction record and the email address you bought with, nothing more.
+        </p>
+        <p>
+          We may change the price of WhatPort Pro at any time. A change never affects a
+          purchase already made.
+        </p>
+
+        <h2>7. Delivery</h2>
+        <p>
+          Your licence key is sent by email to the address used at checkout, normally
+          within a few minutes of payment clearing. Some payment methods take longer to
+          confirm, in which case the key is sent once the payment settles.
+        </p>
+        <p>
+          If your key has not arrived, check your spam folder first, then contact
+          <a href="mailto:support@whatport.app">support@whatport.app</a> with your
+          Stripe receipt number and we will resend it.
+        </p>
+
+        <h2>8. Activation and offline use</h2>
+        <p>
+          WhatPort validates your licence key with our licensing server when you first
+          activate it, and once each time the app launches afterwards. This is how the
+          two-Mac limit is enforced.
+        </p>
+        <p>
+          If the server cannot be reached, Pro continues to work offline for up to 30
+          days. An internet connection is required for the initial activation.
+        </p>
+
+        <h2>9. Refunds</h2>
+        <p>
+          If WhatPort Pro is not right for you, contact
+          <a href="mailto:support@whatport.app">support@whatport.app</a> within 14 days
+          of purchase and we will refund you in full. You do not need to give a reason.
+        </p>
+        <p>
+          Refunds are issued to the original payment method through Stripe. On refund,
+          your licence key is deactivated and you must stop using Pro features. You may
+          continue to use the free app.
+        </p>
+        <p>
+          If you are buying as a consumer rather than for a business, this promise is in
+          addition to your statutory rights and does not affect them.
+        </p>
+
+        <h2>10. Updates</h2>
+        <p>
+          Updates to WhatPort Pro are included at no extra cost. You will receive them
+          for as long as we continue to develop and release them.
+        </p>
+        <p>
+          We do not commit to releasing any particular feature, to any release schedule,
+          or to developing Pro indefinitely. Pro is sold on the basis of what it does
+          today. Anything that arrives later is a bonus, not a commitment.
+        </p>
+
+        <h2>11. What WhatPort is, and is not</h2>
+        <p>
+          WhatPort reads the information macOS exposes about your ports, links, power
+          contracts and connected devices, and explains it in plain English. It works
+          from what the hardware reports rather than by physically measuring anything,
+          which makes it a diagnostic tool rather than a test instrument.
+        </p>
+        <p>
+          Some of what WhatPort shows comes from data a device, dock, charger or cable
+          reports about itself. Any of those can misreport, whether through a
+          manufacturing fault, a design shortcut or deliberate misrepresentation.
+          WhatPort can only tell you what was reported and what the connection actually
+          achieved.
+        </p>
+        <p>It follows that:</p>
+        <ul>
+          <li><strong>WhatPort output is not a certification.</strong> It is not a USB
+            Implementers Forum or Thunderbolt certification, a conformance or compliance
+            test, or proof that a port, cable or device is genuine, counterfeit, safe or
+            unsafe. Do not present it as any of those, to a supplier, a customer or
+            anyone else.</li>
+          <li><strong>Port health scoring is not a hardware diagnosis.</strong> It
+            counts how often faults recur on a port over time. A poor score is a prompt
+            to investigate, not a finding that the hardware is defective, and it is not
+            evidence for a warranty or repair claim on its own.</li>
+          <li><strong>Findings describe data, not manufacturers.</strong> Where WhatPort
+            flags a reading as unusual or inconsistent, that is a statement about the
+            data read from that specific unit on that specific connection. It is not an
+            assertion about any named manufacturer, brand or product line, and must not
+            be represented as one.</li>
+          <li><strong>Do not rely on it alone for consequential decisions.</strong>
+            WhatPort must not be the sole basis for any decision where being wrong could
+            cause injury, property damage or financial loss. Verify independently.</li>
+          <li><strong>Not for safety-critical use.</strong> WhatPort is not designed,
+            tested or certified for use in medical, aviation, automotive, maritime,
+            industrial control, nuclear or any other environment where failure could
+            lead to death, injury or serious harm. Do not use it in those settings.</li>
+        </ul>
+
+        <h2>12. Support</h2>
+        <p>
+          Support for WhatPort Pro is provided by email at
+          <a href="mailto:support@whatport.app">support@whatport.app</a>, on a
+          best-effort basis. We aim to reply promptly but do not guarantee any response
+          time or resolution time, and there is no service level agreement.
+        </p>
+        <p>
+          We do not guarantee uninterrupted availability of the licensing server or the
+          website. The 30-day offline grace period in section 8 is designed so that a
+          temporary outage does not stop you working.
+        </p>
+
+        <h2>13. If the licensing service is discontinued</h2>
+        <p>
+          If we ever retire the licence activation service, we will provide a means for
+          existing licence holders to continue using WhatPort Pro on the Macs they have
+          already activated, for example through an app update that removes the online
+          check. Your perpetual licence does not depend on us running a server forever.
+        </p>
+
+        <h2>14. Warranty disclaimer</h2>
+        <p>
+          WhatPort Pro is provided "as is". To the fullest extent permitted by law, we
+          exclude all warranties, conditions and representations that are not expressly
+          set out in these terms, whether implied by statute, common law or otherwise.
+        </p>
+        <p>
+          In particular, we do not warrant that the software will be error free or
+          uninterrupted, that its readings will be complete or accurate in every case,
+          or that it is fit for any particular purpose you have in mind. Apple may
+          change what macOS exposes at any time, which can change or remove what
+          WhatPort is able to read.
+        </p>
+        <p>If you are a consumer, this section does not affect your statutory rights.</p>
+
+        <h2>15. Limitation of liability</h2>
+        <p>
+          Nothing in these terms limits or excludes our liability for death or personal
+          injury caused by our negligence, for fraud or fraudulent misrepresentation, or
+          for any other liability that cannot lawfully be limited or excluded. If you
+          are a consumer, nothing in these terms affects your statutory rights.
+        </p>
+        <p>
+          Subject to that, our total liability to you arising out of or in connection
+          with these terms or your use of WhatPort Pro, whether in contract, tort
+          (including negligence), breach of statutory duty or otherwise, is limited to
+          the amount you paid for your licence.
+        </p>
+        <p>
+          We are not liable for loss of profit, loss of business, loss of anticipated
+          savings, loss or corruption of data, damage to hardware or equipment, or any
+          indirect or consequential loss, however arising.
+        </p>
+        <p>
+          This allocation of risk is reflected in the price, and Pro is sold on the clear
+          basis set out in section 11.
+        </p>
+
+        <h2>16. Data protection</h2>
+        <p>
+          Our <a href="/privacy.html">privacy policy</a> explains what data the app and
+          the purchase process handle. In summary, buying Pro involves your email
+          address, your licence key, and the hardware UUID of each Mac you activate on.
+          The free app sends none of that, and the Flight Recorder's history stays on
+          your Mac.
+        </p>
+
+        <h2>17. Volume and site licensing</h2>
+        <p>
+          Each Pro licence covers two Macs, so for a handful of machines you can simply
+          buy additional licences. If you need WhatPort Pro on ten or more Macs, email
+          <a href="mailto:support@whatport.app">support@whatport.app</a>. We offer
+          multi-seat and site licensing on request, and will agree sensible terms rather
+          than have you buy keys one at a time. Any agreed volume terms supplement these
+          terms and prevail over them where they conflict.
+        </p>
+
+        <h2>18. Termination</h2>
+        <p>
+          We may terminate your Pro licence if you materially breach these terms, in
+          particular by sharing or reselling keys or by circumventing licence activation.
+          Where the breach can be put right, we will tell you and give you a reasonable
+          opportunity to do so first.
+        </p>
+        <p>
+          On termination you must stop using Pro features. You may continue to use the
+          free MIT licensed app, which is unaffected.
+        </p>
+
+        <h2>19. Notices</h2>
+        <p>
+          Any notice you need to give us under these terms should be sent by email to
+          <a href="mailto:support@whatport.app">support@whatport.app</a>. Email is the
+          fastest way to reach us and the address we monitor. You may also write to our
+          registered office at the address in section 1.
+        </p>
+        <p>
+          We will send notices to you at the email address you bought your licence with,
+          so please keep it current or tell us if it changes.
+        </p>
+
+        <h2>20. Complaints</h2>
+        <p>
+          If something has gone wrong, email
+          <a href="mailto:support@whatport.app">support@whatport.app</a> with the details
+          and we will look into it and reply. We would always rather sort a problem out
+          directly than have you left unhappy.
+        </p>
+        <p>
+          Raising a complaint with us does not affect any legal rights you have,
+          including your right to take a dispute further if we cannot resolve it between
+          us.
+        </p>
+
+        <h2>21. Changes to these terms</h2>
+        <p>
+          We may update these terms for future purchases. The version that applies to you
+          is the one published when you bought your licence. We will not apply changes
+          retrospectively in a way that reduces your rights.
+        </p>
+
+        <h2>22. General</h2>
+        <p>
+          These terms, together with our <a href="/privacy.html">privacy policy</a> and
+          any volume licensing agreement we have signed with you, are the entire
+          agreement between us about WhatPort Pro. They replace anything said or written
+          beforehand. You confirm that you have not relied on any statement, promise or
+          representation that is not set out in them. This does not limit liability for
+          fraud or fraudulent misrepresentation. If you are a consumer, this paragraph
+          does not affect your rights in respect of any statement we made that you
+          relied on.
+        </p>
+        <p>
+          We may assign or transfer our rights and obligations under these terms, for
+          example if the business is sold, provided this does not reduce your rights. You
+          may not transfer your licence without our written consent, which we will not
+          unreasonably withhold. If your business is sold or reorganised and you want the
+          licence to move with it, just ask.
+        </p>
+        <p>
+          If any provision of these terms is found to be unenforceable, the rest remains
+          in force. A delay in enforcing a right is not a waiver of it.
+        </p>
+        <p>
+          These terms and any dispute arising from them are governed by the law of England
+          and Wales, and the courts of England and Wales have exclusive jurisdiction. If
+          you are a consumer resident elsewhere in the UK, you may also bring proceedings
+          in your local courts.
+        </p>
+
+        <hr>
+
+        <h2>Contact</h2>
+        <p>
+          Bitmoor Ltd, Unit A478, 4-6 Greatorex Street, London, United Kingdom, E1 5NF.
+          Company number 17133695. Email
+          <a href="mailto:support@whatport.app">support@whatport.app</a>.
+        </p>
+      </div>
+    </main>
+
+    <footer>
+      <div class="wrap-wide">
+        <span>A <a href="https://www.bitmoor.co.uk">Bitmoor</a> product. Founded by <a href="https://github.com/darrylmorley">Darryl Morley</a>. MIT licensed.</span>
+        <span class="footer-links">
+          <a href="/">Home</a>
+          <span class="sep">&middot;</span>
+          <a href="/privacy.html">Privacy</a>
+          <span class="sep">&middot;</span>
+          <a href="/terms.html">Terms</a>
+          <span class="sep">&middot;</span>
+          <a href="https://github.com/darrylmorley/whatport">Source</a>
+        </span>
+      </div>
+    </footer>
+  </body>
+</html>

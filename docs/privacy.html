@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#2563eb">
+    <title>WhatPort: Privacy Policy</title>
+    <meta name="description" content="Privacy policy for WhatPort, the macOS menu bar app for real-time USB-C port status.">
+
+    <link rel="canonical" href="https://www.whatport.app/privacy.html">
+    <link rel="icon" href="icon.png" type="image/png">
+    <link rel="apple-touch-icon" href="icon.png">
+
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="WhatPort">
+    <meta property="og:url" content="https://www.whatport.app/privacy.html">
+    <meta property="og:title" content="WhatPort: Privacy Policy">
+    <meta property="og:description" content="What data WhatPort handles: local IOKit reads, an update check, and the Pro licence.">
+    <meta property="og:image" content="https://www.whatport.app/og-card.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="WhatPort: Privacy Policy">
+    <meta name="twitter:description" content="What data WhatPort handles: local IOKit reads, an update check, and the Pro licence.">
+    <meta name="twitter:image" content="https://www.whatport.app/og-card.png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #0e1620;
+        --ink-soft: #364152;
+        --muted: #6a7585;
+        --line: #e3e8ef;
+        --line-soft: #eef2f7;
+        --bg: #fafbfc;
+        --panel: #ffffff;
+        --accent: #2563eb;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 16px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      main { flex: 1 0 auto; padding: 48px 0 80px; }
+      footer { flex-shrink: 0; }
+
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      img { display: block; max-width: 100%; }
+
+      code {
+        background: var(--line-soft);
+        padding: 1px 6px;
+        border-radius: 5px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 0.9em;
+      }
+
+      .wrap { width: min(720px, calc(100% - 40px)); margin: 0 auto; }
+      .wrap-wide { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+
+      .nav {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: rgba(250, 251, 252, 0.85);
+        backdrop-filter: saturate(180%) blur(12px);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .nav-inner {
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 700;
+        font-size: 16px;
+        color: var(--ink);
+      }
+      .brand:hover { text-decoration: none; }
+
+      .mark {
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 28px;
+        font-size: 14px;
+        color: var(--ink-soft);
+      }
+      .nav-links a { color: inherit; }
+      .nav-links a:hover { color: var(--ink); text-decoration: none; }
+
+      .nav .button {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 14px;
+        min-height: 36px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--ink);
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1;
+      }
+      .nav .button:hover { border-color: #c8d0db; text-decoration: none; }
+
+      h1 {
+        font-size: 32px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        margin: 0 0 8px;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        font-size: 14px;
+        margin: 0 0 32px;
+      }
+
+      h2 {
+        font-size: 20px;
+        font-weight: 700;
+        margin: 32px 0 12px;
+        scroll-margin-top: 80px;
+      }
+
+      p { margin: 0 0 14px; color: var(--ink-soft); }
+      ul { margin: 0 0 14px; padding-left: 20px; color: var(--ink-soft); }
+      li { margin-bottom: 6px; }
+
+      footer {
+        padding: 32px 0;
+        background: #0c1219;
+        color: rgba(255, 255, 255, 0.55);
+        font-size: 13.5px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      footer .wrap-wide {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      footer a { color: rgba(255, 255, 255, 0.85); }
+      footer a:hover { color: #fff; }
+      footer .footer-links { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+      footer .footer-links .sep { color: rgba(255, 255, 255, 0.3); }
+
+      @media (max-width: 720px) {
+        .nav-links a:not(.button) { display: none; }
+        .nav-links { gap: 12px; }
+        h1 { font-size: 28px; }
+        footer .wrap-wide { flex-direction: column; align-items: flex-start; }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav" aria-label="Primary">
+      <div class="wrap-wide nav-inner">
+        <a class="brand" href="/">
+          <img class="mark" src="icon.png" alt="" aria-hidden="true" width="28" height="28">
+          <span>WhatPort</span>
+        </a>
+        <div class="nav-links">
+          <a href="/#features">Features</a>
+          <a href="/#pro">Pro</a>
+          <a href="/#install">Install</a>
+          <a class="button" href="https://github.com/darrylmorley/whatport">GitHub</a>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <div class="wrap">
+        <h1>Privacy Policy</h1>
+        <p class="subtitle">Last updated: 31 July 2026</p>
+
+        <p>
+          WhatPort is a small macOS menu bar app that shows what each USB-C and
+          Thunderbolt port on your Mac is doing. This page explains what data the
+          app handles.
+        </p>
+        <p>
+          WhatPort is published by Bitmoor Ltd, a company registered in England and
+          Wales under company number 17133695, with its registered office at Unit
+          A478, 4-6 Greatorex Street, London, United Kingdom, E1 5NF. Bitmoor Ltd is
+          the data controller for the limited personal data described below. If you
+          buy WhatPort Pro, the <a href="/terms.html">terms and conditions</a> also
+          apply.
+        </p>
+
+        <h2>What WhatPort reads</h2>
+        <p>
+          WhatPort reads USB-C port state, Thunderbolt link information, the SMC
+          power channels, and the USB-PD power contract from your Mac through
+          Apple's IOKit framework. Every one of those reads is unprivileged, and all
+          of it stays on your Mac. It is used only to draw the port list and detail
+          panels you see in the menu bar.
+        </p>
+
+        <h2>What WhatPort sends</h2>
+        <p>
+          The free app makes one network request: an update check against the public
+          GitHub Releases API, every six hours. That request carries a
+          <code>User-Agent</code> header naming the app and your installed version
+          (for example, <code>WhatPort/1.6.0</code>) and nothing else. If a newer
+          version exists you get a banner, and the release is downloaded only when
+          you click Update.
+        </p>
+        <p>
+          No analytics, no telemetry, no identifiers. The source is on
+          <a href="https://github.com/darrylmorley/whatport">GitHub</a> if you want
+          to check.
+        </p>
+
+        <h2>WhatPort Pro (purchase and licensing)</h2>
+        <p>
+          WhatPort Pro is an optional paid upgrade that unlocks the Flight Recorder.
+          Buying it and keeping it activated involves personal data the free app
+          never touches.
+        </p>
+        <ul>
+          <li><strong>Purchase.</strong> Payment is handled by Stripe. Your card
+            details and email address are processed by Stripe under
+            <a href="https://stripe.com/privacy">Stripe's privacy policy</a>.
+            WhatPort never sees or stores your card details.</li>
+          <li><strong>Licence delivery.</strong> Your licence key is emailed to the
+            address you bought it with.</li>
+          <li><strong>Activation and validation.</strong> When you activate a key,
+            and once each time the app launches afterwards, WhatPort sends your
+            licence key and your Mac's hardware UUID (the
+            <code>IOPlatformUUID</code>) to the licensing server at
+            <code>www.whatport.app/api/validate</code> to confirm the licence and
+            enforce the two-Mac limit. If the server cannot be reached, Pro keeps
+            working offline for up to 30 days.</li>
+          <li><strong>What the licence server stores.</strong> Your licence key, the
+            email address you bought it with, and the hardware UUID of each Mac the
+            key has been activated on (up to two), so one key cannot be used on more
+            machines than allowed.</li>
+          <li><strong>Support.</strong> If you email support, we hold the email
+            address and whatever you send us (typically a licence key or Stripe
+            receipt number) for as long as it takes to sort the problem out.</li>
+        </ul>
+        <p>
+          Removing the key in the app deletes it from that Mac. The free app makes
+          none of these calls.
+        </p>
+
+        <h2>What the Flight Recorder stores</h2>
+        <p>
+          The Flight Recorder writes port events and power samples to a local
+          database at
+          <code>~/Library/Application Support/WhatPort/flight-recorder.db</code>.
+          It stays on your Mac. Nothing in it is uploaded, and it leaves your machine
+          only if you export a session to JSON or CSV yourself. Delete the file and
+          the history is gone.
+        </p>
+
+        <h2>What WhatPort stores</h2>
+        <p>
+          WhatPort keeps your preferences (window mode, port count, font size,
+          notification and recorder settings) in the standard macOS user defaults
+          system, on your Mac. With Pro, your licence key is stored there too so you
+          do not have to re-enter it.
+        </p>
+
+        <h2>What WhatPort does not do</h2>
+        <p>
+          Outside the Pro purchase and licensing described above, WhatPort does not
+          collect, store, or transmit:
+        </p>
+        <ul>
+          <li>Personal information (name, email, address, phone number).</li>
+          <li>Account or device identifiers.</li>
+          <li>Browsing or app usage analytics.</li>
+          <li>Information about other apps or files on your Mac.</li>
+          <li>Anything about the devices you plug in, beyond drawing them in the app.</li>
+        </ul>
+
+        <h2>Contact</h2>
+        <p>
+          Bug reports and questions go through the public GitHub repository at
+          <a href="https://github.com/darrylmorley/whatport">github.com/darrylmorley/whatport</a>.
+        </p>
+        <p>
+          For privacy questions, or to ask what data we hold about a Pro purchase and
+          have it corrected or deleted, email
+          <a href="mailto:support@whatport.app">support@whatport.app</a> or write to
+          Bitmoor Ltd, Unit A478, 4-6 Greatorex Street, London, United Kingdom, E1
+          5NF. If you are unhappy with how we have handled your data, you can
+          complain to the UK Information Commissioner's Office at
+          <a href="https://ico.org.uk">ico.org.uk</a>.
+        </p>
+      </div>
+    </main>
+
+    <footer>
+      <div class="wrap-wide">
+        <span>A <a href="https://www.bitmoor.co.uk">Bitmoor</a> product. Founded by <a href="https://github.com/darrylmorley">Darryl Morley</a>. MIT licensed.</span>
+        <span class="footer-links">
+          <a href="/">Home</a>
+          <span class="sep">&middot;</span>
+          <a href="/privacy.html">Privacy</a>
+          <span class="sep">&middot;</span>
+          <a href="/terms.html">Terms</a>
+          <span class="sep">&middot;</span>
+          <a href="https://github.com/darrylmorley/whatport">Source</a>
+        </span>
+      </div>
+    </footer>
+  </body>
+</html>

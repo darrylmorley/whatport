@@ -55,7 +55,7 @@ The live view tells you what your ports are doing right now. The **Flight Record
 - **Sessions.** Bookmark a stretch of recording, name it, and export it to JSON or CSV.
 - **Survives an overnight kill.** With Launch at Login on, it restarts itself within seconds if macOS stops it to free memory. A deliberate Quit still quits.
 
-**£4.99 one-time, works on up to 2 Macs.** Secure checkout via Stripe; your licence key is emailed instantly. [Buy WhatPort Pro at whatport.app](https://www.whatport.app/#pro).
+**£4.99 one-time, works on up to 2 Macs.** Secure checkout via Stripe, your licence key is emailed instantly, 14-day refund if it isn't for you. [Buy WhatPort Pro at whatport.app](https://www.whatport.app/#pro) ([terms](https://www.whatport.app/terms.html), [privacy](https://www.whatport.app/privacy.html)).
 
 The base app in this repository is the free, open-source half. The Flight Recorder is the paid part and is not included in the open-source build.
 
@@ -84,7 +84,7 @@ cd whatport
 make app        # assemble WhatPort.app
 ```
 
-`swift build` compile-checks without producing a runnable bundle, `make app` assembles the `.app`, and `make run` launches it. No entitlements or root access needed, all IOKit reads are unprivileged.
+`swift build` compile-checks without producing a runnable bundle, `make app` assembles the `.app`, and `make run` launches it. No root access needed, all IOKit reads are unprivileged. The only entitlement the signed build carries is outbound network access, for the update check and Pro licence validation.
 
 ## How it works
 

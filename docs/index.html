@@ -18,14 +18,16 @@
     <meta property="og:url" content="https://www.whatport.app/">
     <meta property="og:title" content="WhatPort: Real-time USB-C port monitoring for Mac">
     <meta property="og:description" content="See what every USB-C port on your Mac is doing. Protocol detection, live lane status, and power monitoring in a menu bar app.">
-    <meta property="og:image" content="https://www.whatport.app/screenshot-list.webp">
-    <meta property="og:image:alt" content="WhatPort menu bar app showing live USB-C port status">
+    <meta property="og:image" content="https://www.whatport.app/og-card.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="WhatPort: see what your USB-C ports are actually doing, with the menu bar port list">
 
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="WhatPort: Real-time USB-C port monitoring for Mac">
     <meta name="twitter:description" content="See what every USB-C port on your Mac is doing. Protocol detection, live lane status, and power monitoring in a menu bar app.">
-    <meta name="twitter:image" content="https://www.whatport.app/screenshot-list.webp">
-    <meta name="twitter:image:alt" content="WhatPort menu bar app showing live USB-C port status">
+    <meta name="twitter:image" content="https://www.whatport.app/og-card.png">
+    <meta name="twitter:image:alt" content="WhatPort: see what your USB-C ports are actually doing, with the menu bar port list">
 
     <script type="application/ld+json">
     {
@@ -88,7 +90,7 @@
           "name": "Does it need root or special permissions?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. All IOKit reads are unprivileged. No entitlements, no System Extension, no background daemon. It runs as a regular menu bar app."
+            "text": "No. All IOKit reads are unprivileged. No root, no System Extension, no background daemon. It runs as a regular menu bar app. The only entitlement it carries is outbound network access, used for the update check and Pro licence validation."
           }
         },
         {
@@ -664,6 +666,8 @@
 
       footer a { color: rgba(255, 255, 255, 0.85); }
       footer a:hover { color: #fff; }
+      footer .footer-links { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+      footer .footer-links .sep { color: rgba(255, 255, 255, 0.3); }
 
       /* Responsive */
       @media (max-width: 900px) {
@@ -780,6 +784,8 @@
         margin-bottom: 0;
       }
       .buy-reassure strong { color: var(--good); }
+
+      .buy-stripe-note a { color: var(--accent); text-decoration: underline; }
 
       .buy-stripe-note {
         color: var(--muted);
@@ -929,7 +935,7 @@
           </div>
         </div>
         <div class="hero-shot">
-          <img src="screenshot-list.webp" alt="WhatPort menu bar showing connected USB-C devices with protocol and power info" width="340">
+          <img src="screenshot-list.webp" alt="WhatPort menu bar showing connected USB-C devices with protocol and power info" width="392" height="492">
         </div>
       </div>
     </header>
@@ -1052,8 +1058,8 @@
             <div class="icon" aria-hidden="true">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             </div>
-            <h3>Port health</h3>
-            <p>Lifetime connection counts and error tracking per port. Spot overcurrent events, link errors, and enumeration failures.</p>
+            <h3>Port statistics</h3>
+            <p>Lifetime connection counts and error tracking per port, readable whether or not anything is plugged in. Spot overcurrent events, link errors, and enumeration failures.</p>
           </article>
 
           <article class="feature">
@@ -1128,23 +1134,23 @@
 
         <div class="screenshot-grid">
           <figure>
-            <img src="screenshot-detail-connections.webp" alt="DisplayPort detail showing link rate, lanes, the connections in use, and lane activity" width="300" loading="lazy">
+            <img src="screenshot-detail-connections.webp" alt="DisplayPort detail showing link rate, lanes, the connections in use, and lane activity" width="392" height="632" loading="lazy">
             <figcaption>Connections and display link</figcaption>
           </figure>
           <figure>
-            <img src="screenshot-detail-charging.webp" alt="Power detail showing charging status, the named charger and its power menu, and a live graph" width="300" loading="lazy">
+            <img src="screenshot-detail-charging.webp" alt="Power detail showing charging status, the named charger and its power menu, and a live graph" width="392" height="632" loading="lazy">
             <figcaption>Charging status and charger</figcaption>
           </figure>
           <figure>
-            <img src="screenshot-detail-tb.webp" alt="Thunderbolt display detail showing lanes and power" width="300" loading="lazy">
+            <img src="screenshot-detail-tb.webp" alt="Thunderbolt display detail showing lanes and power" width="392" height="632" loading="lazy">
             <figcaption>Thunderbolt display</figcaption>
           </figure>
           <figure>
-            <img src="screenshot-detail-usb.webp" alt="USB device detail showing live lanes, cable info, and a 60-second power graph" width="300" loading="lazy">
+            <img src="screenshot-detail-usb.webp" alt="USB device detail showing live lanes, cable info, and a 60-second power graph" width="392" height="632" loading="lazy">
             <figcaption>USB device detail</figcaption>
           </figure>
           <figure>
-            <img src="screenshot-list.webp" alt="Port list overview" width="300" loading="lazy">
+            <img src="screenshot-list.webp" alt="Port list overview" width="392" height="492" loading="lazy">
             <figcaption>Port overview</figcaption>
           </figure>
         </div>
@@ -1219,7 +1225,7 @@
               <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
             </button>
             <p class="buy-reassure"><strong>14-day money-back guarantee, no questions asked.</strong> Apple Silicon only (M1 and later).</p>
-            <p class="buy-stripe-note">Secure checkout via Stripe. Your licence key is emailed instantly.</p>
+            <p class="buy-stripe-note">Secure checkout via Stripe. Your licence key is emailed instantly.<br>By buying you agree to the <a href="/terms.html">terms and conditions</a>.</p>
             <p class="buy-error" id="buy-error" role="alert" hidden></p>
           </div>
           <p class="pro-existing">Already bought? Your key is in your email. Activate it in the app under Flight Recorder.</p>
@@ -1233,7 +1239,7 @@
           <span class="section-tag">How it works</span>
           <h2>Unprivileged IOKit reads, one clear picture.</h2>
           <p>
-            WhatPort correlates several IOKit and SMC services per physical port. Everything is read unprivileged: no root access, no entitlements, no background daemon. State updates the moment a device connects or disconnects, and is polled every second as a safety net.
+            WhatPort correlates several IOKit and SMC services per physical port. Everything is read unprivileged: no root access, no special entitlements, no background daemon. State updates the moment a device connects or disconnects, and is polled every second as a safety net.
           </p>
         </div>
 
@@ -1275,7 +1281,7 @@
           </div>
           <div class="faq-item">
             <h3>Does it need root or special permissions?</h3>
-            <p>No. All IOKit reads are unprivileged. No entitlements, no System Extension, no background daemon. It runs as a regular menu bar app.</p>
+            <p>No. All IOKit reads are unprivileged. No root, no System Extension, no background daemon. It runs as a regular menu bar app. The only entitlement it carries is outbound network access, used for the update check and Pro licence validation.</p>
           </div>
           <div class="faq-item">
             <h3>Does it phone home?</h3>
@@ -1349,7 +1355,7 @@
           </span>
           <span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-            No entitlements
+            No special entitlements
           </span>
           <span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
@@ -1362,10 +1368,14 @@
     <footer>
       <div class="wrap">
         <span>A <a href="https://www.bitmoor.co.uk">Bitmoor</a> product. Founded by <a href="https://github.com/darrylmorley">Darryl Morley</a>. MIT licensed.</span>
-        <span>
+        <span class="footer-links">
           <a href="https://github.com/darrylmorley/whatport">Source</a>
-          &nbsp;&middot;&nbsp;
+          <span class="sep">&middot;</span>
           <a href="https://github.com/darrylmorley/whatport/releases">Releases</a>
+          <span class="sep">&middot;</span>
+          <a href="/privacy.html">Privacy</a>
+          <span class="sep">&middot;</span>
+          <a href="/terms.html">Terms</a>
         </span>
       </div>
     </footer>
