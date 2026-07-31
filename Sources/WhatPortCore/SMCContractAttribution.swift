@@ -20,9 +20,12 @@ import Foundation
 // amps. WhatCable shipped this route in its 1.3.0 beta and testers on the
 // affected hardware confirmed it holds.
 //
-// WHAT IT CANNOT DO. It never reports MagSafe: the SMC has never carried a
-// MagSafe contract in the corpus, so a MagSafe match here would be a join error
-// rather than a discovery. And desktops publish none of these keys at all.
+// WHAT IT DOES NOT DO. It never attributes to MagSafe. Not because the SMC is
+// silent there (it publishes MagSafe contract channels on 118 corpus machines,
+// contrary to what this comment claimed at first) but because the node is
+// macOS's own answer for MagSafe and outranks anything synthesized. Those
+// channels are still read: `PortManager` uses them as evidence of which
+// connector is being fed. Desktops publish none of these keys at all.
 public enum SMCContractAttribution {
 
     // A single switch. Turning this off returns every affected port to the
@@ -95,17 +98,24 @@ public enum SMCContractAttribution {
         // so a USB-C peripheral's contract could become the sole candidate and
         // be presented as the Mac's charge.
         //
-        // The signal is the MagSafe port being CONNECTED, not a MagSafe node
-        // existing. The first version of this gate used node presence and was
-        // wrong: on this M5, `IOPortFeaturePowerSource` with `PowerSourceName`
-        // "USB-PD" is published under MagSafe 3 while `ConnectionActive` is No
-        // and nothing is plugged into it. Keying on the node would decline on
-        // every machine that publishes eagerly, which would quietly kill this
-        // whole path the moment a future Pro/Max behaves like the M5 does.
+        // That case is caught by the incoming-power check itself, because the
+        // non-USB-C ports are built and attributed BEFORE this runs: a MagSafe
+        // port that is genuinely the one delivering already carries incoming
+        // power by now, whatever the battery is doing.
+        //
+        // This deliberately no longer declines merely because a MagSafe port is
+        // connected. It did, briefly, and that was too blunt in a common setup:
+        // an M1 Pro charging through a USB-C dock with a MagSafe cable also
+        // plugged into the wall left BOTH cards blank, silently disabling the
+        // one path that machine has. A connected MagSafe that is not delivering
+        // is just a cable.
+        //
+        // What makes that safe is the SMC's own behaviour: `DxMP` is only
+        // populated for power coming IN. Across 449 corpus contract channels,
+        // none was simultaneously sourcing power outward, so a channel carrying
+        // a contract is a port being fed, not a peripheral being powered.
         let anyIncomingPower = ports.contains { $0.power?.direction == .incoming }
-        let magSafeConnected = ports.contains { $0.portType == .magSafe && $0.ccConnected }
         guard !anyIncomingPower,
-              !magSafeConnected,
               !macOSDescribesCharging(chargerNodes: chargerNodes)
         else { return nil }
 
@@ -117,13 +127,10 @@ public enum SMCContractAttribution {
         )
 
         let candidates = contracts.compactMap { contract -> (portID: Int, contract: SMCPortContractInput)? in
-            // GATE 3: a plausible charging contract.
-            guard contract.powerMW > 0, contract.voltageMV >= minimumContractVoltageMV else { return nil }
-
-            // GATE 4: not the Mac's own output. The label is empty on plenty of
-            // genuine chargers so its absence proves nothing, but when it does
-            // say "usb host" it is describing power going the other way.
-            guard !contract.label.lowercased().contains(outgoingLabel) else { return nil }
+            // GATES 3 and 4: a plausible charging contract, and not the Mac's
+            // own output. See `isPlausibleIncomingContract`, which every caller
+            // asking this question shares.
+            guard isPlausibleIncomingContract(contract) else { return nil }
 
             // GATE 5: the channel resolves to a port through the UUID join. No
             // guessing by channel index: the SMC D-index is not the physical
@@ -163,6 +170,47 @@ public enum SMCContractAttribution {
     // a few kernel calls; reading less would cost the reading itself.
     public static func macOSDescribesCharging(chargerNodes: [ChargerInput]) -> Bool {
         chargerNodes.contains { $0.hasWinningContract }
+    }
+
+    // True when an SMC contract channel resolves to a connected USB-C port.
+    //
+    // This is evidence that USB-C is the connector taking power IN, and it is
+    // needed even when the gates above decline to put a figure on that port.
+    // On M1 Pro / Max / Ultra there is no USB-C node to look at, so without
+    // this the only reading of "no USB-C contract anywhere" is "USB-C is not
+    // charging", and a MagSafe cable that happens to be plugged in would claim
+    // the machine's whole power-in figure while USB-C actually carried it.
+    //
+    // Deliberately not gated on `isEnabled`: the rollback switch exists to stop
+    // this path PUTTING A FIGURE on a card, not to make the rest of the app
+    // forget what the SMC plainly says about which port is fed.
+    // A channel that looks like a real charge coming in: positive power, at
+    // least the 5 V floor every USB-C contract starts at, and not labelled as
+    // the Mac sourcing power outward.
+    //
+    // Shared so every caller asking "is this channel evidence of a port being
+    // fed" applies the same floor. Power, voltage and current are three
+    // independently read SMC keys, so a partial read can pair a plausible
+    // wattage with a nonsense voltage, and a caller that checked only the
+    // wattage would act on it.
+    public static func isPlausibleIncomingContract(_ contract: SMCPortContractInput) -> Bool {
+        guard contract.powerMW > 0, contract.voltageMV >= minimumContractVoltageMV else { return false }
+        return !contract.label.lowercased().contains(outgoingLabel)
+    }
+
+    public static func hasUSBCContractCandidate(
+        contracts: [SMCPortContractInput],
+        ports: [PortState]
+    ) -> Bool {
+        contracts.contains { contract in
+            guard isPlausibleIncomingContract(contract) else { return false }
+            return ports.contains { port in
+                guard let uuid = port.uuid else { return false }
+                return normalisedUUID(uuid) == contract.uuid
+                    && port.portType == .usbC
+                    && port.ccConnected
+            }
+        }
     }
 
     // Normalise an HPM UUID to the SMC DxUI form: dashes stripped, lowercase

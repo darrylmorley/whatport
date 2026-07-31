@@ -789,7 +789,51 @@ extension PortManager {
         applyChargerPower(to: &results, chargerData: chargerData, chargingPower: chargingPower)
 
         // Append non-USB-C ports (MagSafe, etc.), stamping their HPM UUID and health.
-        var nonUSBC = buildNonUSBCPorts(nonUSBCCC, chargerData: chargerData, chargingPower: chargingPower)
+        //
+        // On M1 Pro / Max / Ultra there is no USB-C power-source node to read,
+        // so "no USB-C contract" cannot be taken to mean "USB-C is not
+        // charging". An SMC contract resolving to a connected USB-C port says
+        // it is, and that has to be settled here, before a MagSafe cable that
+        // is merely plugged in claims the machine's whole power-in figure.
+        // Two separate signals, because they carry different weight and
+        // collapsing them into one boolean blanks a MagSafe port that holds its
+        // own macOS-confirmed contract.
+        let usbCHoldsNodeContract = chargerData.contains { $0.portType == "USB-C" && $0.maxWatts > 0 }
+        let usbCHasSMCEvidence = SMCContractAttribution.hasUSBCContractCandidate(
+            contracts: smcPortContracts,
+            ports: results
+        )
+
+        // The same evidence for the MagSafe side. The SMC publishes contract
+        // channels for MagSafe ports too, on 118 corpus machines, and a channel
+        // carrying a contract is a port being fed. We never ATTRIBUTE from it
+        // (the node is authoritative for MagSafe, and the attribution path
+        // takes USB-C ports only), but it settles the one case the node cannot:
+        // MagSafe genuinely delivering while publishing no usable node, with a
+        // USB-C dock also negotiating. Without it that machine's whole draw
+        // lands on the dock.
+        //
+        // Held to the same standard as the USB-C check above, not just a
+        // positive wattage: power, voltage and current are three independently
+        // read SMC keys, so a partial read can leave a plausible-looking power
+        // beside a nonsense voltage, and here that noise would swing the whole
+        // figure onto MagSafe.
+        let magSafeSMCContractPorts = Set(
+            hpmPorts.filter { hpm in
+                hpm.isMagSafe && smcPortContracts.contains { contract in
+                    SMCContractAttribution.isPlausibleIncomingContract(contract)
+                        && SMCContractAttribution.normalisedUUID(hpm.uuid) == contract.uuid
+                }
+            }.map(\.portNumber)
+        )
+        var nonUSBC = buildNonUSBCPorts(
+            nonUSBCCC,
+            chargerData: chargerData,
+            chargingPower: chargingPower,
+            usbCHoldsNodeContract: usbCHoldsNodeContract,
+            usbCHasSMCEvidence: usbCHasSMCEvidence,
+            smcContractPorts: magSafeSMCContractPorts
+        )
         stampMagSafeHPMData(&nonUSBC, hpmPorts: hpmPorts)
         results.append(contentsOf: nonUSBC)
 
@@ -1220,25 +1264,101 @@ extension PortManager {
     // Build port entries for non-USB-C connectors (MagSafe, etc.)
     // These only have CC data, no PHY or TB. They use IDs starting at
     // 100 to avoid colliding with USB-C socket IDs.
+    // systemPowerIn is the machine's total DC-in, not a per-port figure, so only
+    // the connector actually carrying it may show it.
+    //
+    // The two USB-C signals are kept apart because they are not equally strong,
+    // and treating them as one blanks a MagSafe port that is unambiguously the
+    // charger:
+    //
+    // - `usbCHoldsNodeContract`: macOS published a USB-C contract. It is saying
+    //   USB-C is the port being fed, and it outranks anything here.
+    // - `usbCHasSMCEvidence`: an SMC channel resolves to a connected USB-C port.
+    //   Enough to stop a merely-attached MagSafe cable claiming the figure, but
+    //   NOT enough to overrule a MagSafe port holding its own winning contract,
+    //   because that contract is macOS's own answer about this connector while
+    //   the SMC channel is only evidence about the other one.
     private func buildNonUSBCPorts(
         _ ccEntries: [CCInput],
         chargerData: [ChargerInput],
-        chargingPower: ChargingPowerInput? = nil
+        chargingPower: ChargingPowerInput? = nil,
+        usbCHoldsNodeContract: Bool = false,
+        usbCHasSMCEvidence: Bool = false,
+        smcContractPorts: Set<Int> = []
     ) -> [PortState] {
         ccEntries.map { cc in
             let portType: PortType = cc.portType.lowercased().contains("magsafe") ? .magSafe : .usbC
 
-            // Only show live watts when battery is actively charging
-            // and the port is connected.
+            // The contract macOS published for this connector, when it did.
+            //
+            // A WINNING option only. ChargerReader falls back to the highest
+            // entry in PowerSourceOptions when there is no winning one, and
+            // flags that it did; those volts and amps are what the adapter can
+            // offer, not what the two of them agreed on. The view labels this
+            // field "Contract", so filling it from the fallback would report a
+            // capability as an agreement, which is the same class of mistake as
+            // the measured-input values this replaced.
+            let negotiated = chargerData.first {
+                $0.portType != "USB-C" && $0.portNumber == cc.portNumber && $0.hasWinningContract
+            }
+
+            // Show the wattage whenever this connector is the one delivering,
+            // NOT only while the battery happens to be charging.
+            //
+            // The old rule required `isCharging`, so sitting at 100% on MagSafe
+            // showed a connected port with no power at all, even though the
+            // charger was still carrying the machine's whole running load. That
+            // is not an edge case: 312 of 318 corpus machines that are plugged
+            // in and not charging still report a positive systemPowerIn, 4 W to
+            // 41 W of it. Optimised charging pausing at 80% reads the same way.
+            //
+            // "Delivering" is simply that USB-C is not, which makes double
+            // attribution impossible by construction rather than by
+            // observation. Keying it on this connector's OWN contract as well
+            // was tempting and wrong: a MagSafe contract only changes the answer
+            // when USB-C is taking power too, and in that single case it hands
+            // the same watts to two cards. It cannot even be justified as
+            // defensive, because `totalWattsIn` sums every incoming port, so
+            // the menu bar total would double with it.
+            //
+            // The 11 of 84 not-charging corpus machines whose MagSafe node
+            // publishes no contract are covered here, not by a contract check:
+            // nothing says USB-C is taking power, so MagSafe is the only
+            // candidate and gets the figure.
+            //
+            // When the evidence says USB-C is taking power but no figure can be
+            // attributed to it (an SMC contract on a machine where a connected
+            // MagSafe makes the SMC path decline), both cards stay blank. That
+            // is deliberate: the alternative is putting the machine's whole
+            // draw against a MagSafe cable that is only plugged in, and a wrong
+            // port is worse than no number.
+            //
+            // A winning contract on THIS connector overrides that SMC evidence,
+            // because it is macOS answering about this very port. It cannot
+            // double-count: the SMC path declines outright while a MagSafe port
+            // is connected, so it never puts a figure on USB-C in this state.
+            //
+            // Why the battery state is not consulted at all: `ChargingStatus`
+            // already carries charging / fullyCharged / onHoldForHealth /
+            // notCharging, and the detail view shows it on this very card. The
+            // answer to "why isn't it charging" belongs there, not smuggled in
+            // by blanking the wattage.
             var power: PortPower?
-            let batteryIsCharging = chargingPower?.isCharging ?? false
-            if cc.active && batteryIsCharging, let cp = chargingPower, cp.systemPowerIn > 0 {
+            let deliveringOnItsOwnEvidence = negotiated != nil || smcContractPorts.contains(cc.portNumber)
+            let deliversPower = !usbCHoldsNodeContract
+                && (deliveringOnItsOwnEvidence || !usbCHasSMCEvidence)
+            if cc.active, deliversPower, let cp = chargingPower, cp.systemPowerIn > 0 {
                 power = PortPower(
                     watts: Double(cp.systemPowerIn) / 1000.0,
                     current: cp.systemCurrentIn,
                     voltage: cp.systemVoltageIn,
-                    configuredVoltage: cp.systemVoltageIn,
-                    configuredCurrent: cp.systemCurrentIn,
+                    // The negotiated contract, when macOS published one. This
+                    // used to repeat the measured input under the "Contract"
+                    // label, which reported a measurement as an agreement. With
+                    // no contract to show, 0 leaves the row hidden rather than
+                    // relabelling the figure already displayed beside it.
+                    configuredVoltage: negotiated?.voltage ?? 0,
+                    configuredCurrent: negotiated?.maxCurrent ?? 0,
                     vconnCurrent: 0,
                     direction: .incoming
                 )

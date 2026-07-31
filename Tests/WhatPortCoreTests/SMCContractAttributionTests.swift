@@ -140,8 +140,34 @@ private let incomingPower = PortPower(
 // optimised charging) neither trips that check nor publishes a winning
 // contract, so without this a USB-C peripheral's contract would be presented as
 // the Mac's charge.
-@Test func smcContractStaysQuietWhileMagSafeIsConnected() {
-    let magSafeAttachedButNotCharging = PortState(
+@Test func smcContractStaysQuietWhileMagSafeIsDelivering() {
+    // Non-USB-C ports are attributed before this runs, so a MagSafe port that
+    // is the one delivering already carries incoming power, whatever the
+    // battery is doing.
+    let magSafeDelivering = PortState(
+        id: 101,
+        uuid: otherUUID,
+        portType: .magSafe,
+        ccConnected: true,
+        power: incomingPower
+    )
+
+    let resolved = SMCContractAttribution.resolve(
+        contracts: [contract()],
+        ports: [usbCPort(), magSafeDelivering],
+        chargerNodes: [],
+        externalConnected: true
+    )
+
+    #expect(resolved == nil)
+}
+
+// A connected MagSafe cable that is NOT delivering is just a cable. Declining
+// here would leave both cards blank on an M1 Pro charging through a USB-C dock
+// with a MagSafe lead also plugged in, which is the one machine this path
+// exists for.
+@Test func smcContractStillFiresWithAMagSafeCableMerelyAttached() {
+    let magSafeAttachedIdle = PortState(
         id: 101,
         uuid: otherUUID,
         portType: .magSafe,
@@ -150,18 +176,16 @@ private let incomingPower = PortPower(
 
     let resolved = SMCContractAttribution.resolve(
         contracts: [contract()],
-        ports: [usbCPort(), magSafeAttachedButNotCharging],
-        chargerNodes: [],
+        ports: [usbCPort(id: 3), magSafeAttachedIdle],
+        chargerNodes: [ChargerInput(portType: "MagSafe 3", portNumber: 1)],
         externalConnected: true
     )
 
-    #expect(resolved == nil)
+    #expect(resolved?.portID == 3)
 }
 
-// The other side of that gate, and the reason it keys on connection rather than
-// on a node existing: this M5 publishes a "USB-PD" node under MagSafe 3 with
-// nothing plugged into it. Treating that as "MagSafe is charging" would leave
-// the fix dead on every MacBook Pro.
+// A node existing under MagSafe proves nothing: this M5 publishes one with
+// nothing plugged in.
 @Test func smcContractStillFiresWithAnEmptyMagSafePort() {
     let magSafeEmpty = PortState(id: 101, uuid: otherUUID, portType: .magSafe, ccConnected: false)
 
