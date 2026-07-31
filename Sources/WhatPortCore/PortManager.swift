@@ -801,7 +801,13 @@ extension PortManager {
         let usbCHoldsNodeContract = chargerData.contains { $0.portType == "USB-C" && $0.maxWatts > 0 }
         let usbCHasSMCEvidence = SMCContractAttribution.hasUSBCContractCandidate(
             contracts: smcPortContracts,
-            ports: results
+            ports: results,
+            // Same channels' power-OUT readings as the attribution path uses.
+            // Without them this asks a weaker question than resolve() does, and
+            // a USB-C channel that is actually feeding a peripheral would count
+            // as evidence that USB-C is being fed, blanking a MagSafe port that
+            // is genuinely delivering.
+            powerOut: smcPortPower
         )
 
         // The same evidence for the MagSafe side. The SMC publishes contract
@@ -821,8 +827,10 @@ extension PortManager {
         let magSafeSMCContractPorts = Set(
             hpmPorts.filter { hpm in
                 hpm.isMagSafe && smcPortContracts.contains { contract in
-                    SMCContractAttribution.isPlausibleIncomingContract(contract)
-                        && SMCContractAttribution.normalisedUUID(hpm.uuid) == contract.uuid
+                    SMCContractAttribution.isPlausibleIncomingContract(
+                        contract,
+                        powerOut: smcPortPower.first { $0.uuid == contract.uuid }
+                    ) && SMCContractAttribution.normalisedUUID(hpm.uuid) == contract.uuid
                 }
             }.map(\.portNumber)
         )
@@ -845,6 +853,7 @@ extension PortManager {
         applySMCContract(
             to: &results,
             smcPortContracts: smcPortContracts,
+            smcPortPower: smcPortPower,
             chargerData: chargerData,
             chargingPower: chargingPower
         )
@@ -1141,6 +1150,7 @@ extension PortManager {
     private func applySMCContract(
         to results: inout [PortState],
         smcPortContracts: [SMCPortContractInput],
+        smcPortPower: [SMCPortPowerInput],
         chargerData: [ChargerInput],
         chargingPower: ChargingPowerInput?
     ) {
@@ -1152,7 +1162,10 @@ extension PortManager {
             chargerNodes: chargerData,
             // chargingPower is non-nil only when a charger is connected: the
             // reader gates on ExternalConnected.
-            externalConnected: chargingPower != nil
+            externalConnected: chargingPower != nil,
+            // The same channels' power-OUT readings, so a channel measurably
+            // feeding a peripheral cannot be published as an incoming charge.
+            powerOut: smcPortPower
         ) else { return }
 
         guard let index = results.firstIndex(where: { $0.id == resolved.portID }) else { return }

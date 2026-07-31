@@ -53,9 +53,38 @@ public enum SMCContractAttribution {
     // Mac's own output and must never be shown as an incoming charge.
     private static let outgoingLabel = "usb host"
 
-    // Every USB-C contract starts at 5 V, so anything below that is a
-    // partially-populated channel rather than a charger.
-    private static let minimumContractVoltageMV = 5_000
+    // USB-C's lowest rail is 5 V, but the SMC does not always report it as
+    // exactly 5000: six machines in the probe corpus report a real 5 V contract
+    // as 4750 mV, which is inside USB-PD's 5% tolerance. A 5000 floor rejected
+    // all six, so a Mac charging slowly from a weak source (a phone charger, a
+    // bus-powered hub, a display's low-power port) showed no power at all.
+    //
+    // 4500 clears the tolerance band while staying far above anything a partial
+    // read produces: the corpus holds nothing at all between 0 and 4750.
+    private static let minimumContractVoltageMV = 4_500
+
+    // How far DxMV x DxMI may stray from DxMP before the channel is treated as
+    // half-read.
+    //
+    // Every one of the 463 contracts in the probe corpus agrees exactly, to
+    // 0.000%, which says DxMP is the firmware's own product rather than a third
+    // measurement. So this is not a rounding allowance and the check is not
+    // three readings corroborating each other, as a first version of this
+    // comment claimed. What it catches is one of the three keys failing to read
+    // or coming back stale, which breaks the identity: three separate kernel
+    // round trips are made per channel and nothing makes them a snapshot.
+    //
+    // The band is for that case, not for rounding. Kept small because nothing
+    // real sits near it, and a mid-renegotiation tick where the keys are
+    // sampled a syscall apart is meant to decline for one poll rather than
+    // publish a figure assembled from two different contracts.
+    private static let contractConsistencyTolerance = 0.02
+
+    // Power out on the same channel, above which the channel is the Mac
+    // sourcing to a peripheral rather than being fed.
+    //
+    // Small but not zero: an idle channel can report a few milliwatts of noise.
+    private static let outgoingPowerFloorWatts = 0.5
 
     // Resolve this tick's SMC contracts to at most one port.
     //
@@ -74,6 +103,7 @@ public enum SMCContractAttribution {
         ports: [PortState],
         chargerNodes: [ChargerInput],
         externalConnected: Bool,
+        powerOut: [SMCPortPowerInput] = [],
         enabled: Bool = isEnabled
     ) -> (portID: Int, contract: SMCPortContractInput)? {
         guard enabled else { return nil }
@@ -126,11 +156,21 @@ public enum SMCContractAttribution {
             chargerNodes.filter { $0.portType == "USB-C" }.map(\.portNumber)
         )
 
+        // The same channels' power-OUT readings, keyed by the join this file
+        // already trusts, so a contract can be checked against its own channel.
+        let powerOutByUUID = Dictionary(
+            powerOut.map { ($0.uuid, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
         let candidates = contracts.compactMap { contract -> (portID: Int, contract: SMCPortContractInput)? in
             // GATES 3 and 4: a plausible charging contract, and not the Mac's
             // own output. See `isPlausibleIncomingContract`, which every caller
             // asking this question shares.
-            guard isPlausibleIncomingContract(contract) else { return nil }
+            guard isPlausibleIncomingContract(
+                contract,
+                powerOut: powerOutByUUID[contract.uuid]
+            ) else { return nil }
 
             // GATE 5: the channel resolves to a port through the UUID join. No
             // guessing by channel index: the SMC D-index is not the physical
@@ -184,26 +224,64 @@ public enum SMCContractAttribution {
     // Deliberately not gated on `isEnabled`: the rollback switch exists to stop
     // this path PUTTING A FIGURE on a card, not to make the rest of the app
     // forget what the SMC plainly says about which port is fed.
-    // A channel that looks like a real charge coming in: positive power, at
-    // least the 5 V floor every USB-C contract starts at, and not labelled as
-    // the Mac sourcing power outward.
+    // A channel that looks like a real charge coming in: positive power, a
+    // voltage at or above the floor, three figures that describe one contract,
+    // and no sign the channel is the Mac sourcing power outward.
     //
     // Shared so every caller asking "is this channel evidence of a port being
-    // fed" applies the same floor. Power, voltage and current are three
-    // independently read SMC keys, so a partial read can pair a plausible
-    // wattage with a nonsense voltage, and a caller that checked only the
-    // wattage would act on it.
-    public static func isPlausibleIncomingContract(_ contract: SMCPortContractInput) -> Bool {
+    // fed" applies the same rules.
+    //
+    // `powerOut` is the same channel's DxJV / DxJI reading, when the caller has
+    // it. Direction is the one thing worth being sure of here, and a label is
+    // thin evidence for it: only 1 of 463 corpus contracts carries the "usb
+    // host" label, so an outgoing channel is far more likely to be unlabelled
+    // than labelled. A measured outgoing draw is not thin evidence. Nothing in
+    // the corpus has both (0 of 463 contract channels report any power out), so
+    // this rejects nothing real and closes the case the label cannot.
+    public static func isPlausibleIncomingContract(
+        _ contract: SMCPortContractInput,
+        powerOut: SMCPortPowerInput? = nil
+    ) -> Bool {
         guard contract.powerMW > 0, contract.voltageMV >= minimumContractVoltageMV else { return false }
-        return !contract.label.lowercased().contains(outgoingLabel)
+        guard isInternallyConsistent(contract) else { return false }
+        guard !contract.label.lowercased().contains(outgoingLabel) else { return false }
+        guard !isSourcingPowerOut(powerOut) else { return false }
+        return true
+    }
+
+    // Whether the channel is measurably feeding a peripheral.
+    static func isSourcingPowerOut(_ powerOut: SMCPortPowerInput?) -> Bool {
+        guard let powerOut else { return false }
+        return powerOut.watts > outgoingPowerFloorWatts
+    }
+
+    // Whether DxMV x DxMI reproduces DxMP, which is what catches a channel
+    // where one of the three keys failed to read or came back stale. See the
+    // tolerance above for why this is not a rounding allowance.
+    //
+    // Self-guarding rather than relying on the caller's checks, so a direct
+    // caller cannot divide by a zero wattage.
+    static func isInternallyConsistent(_ contract: SMCPortContractInput) -> Bool {
+        guard contract.powerMW > 0, contract.currentMA > 0 else { return false }
+        let product = Double(contract.voltageMV) * Double(contract.currentMA) / 1000.0
+        let stated = Double(contract.powerMW)
+        return abs(product - stated) / stated <= contractConsistencyTolerance
     }
 
     public static func hasUSBCContractCandidate(
         contracts: [SMCPortContractInput],
-        ports: [PortState]
+        ports: [PortState],
+        powerOut: [SMCPortPowerInput] = []
     ) -> Bool {
-        contracts.contains { contract in
-            guard isPlausibleIncomingContract(contract) else { return false }
+        let powerOutByUUID = Dictionary(
+            powerOut.map { ($0.uuid, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return contracts.contains { contract in
+            guard isPlausibleIncomingContract(
+                contract,
+                powerOut: powerOutByUUID[contract.uuid]
+            ) else { return false }
             return ports.contains { port in
                 guard let uuid = port.uuid else { return false }
                 return normalisedUUID(uuid) == contract.uuid

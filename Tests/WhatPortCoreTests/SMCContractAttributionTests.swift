@@ -404,3 +404,147 @@ private let incomingPower = PortPower(
 
     #expect(manager.ports.first { $0.id == 1 }?.power == nil)
 }
+
+// MARK: - The 5 V floor (DAR-247)
+
+// The SMC does not always report a 5 V rail as exactly 5000. These are the real
+// figures from the six machines in the probe corpus that report 4750, which a
+// 5000 floor rejected outright: those Macs showed no charging power at all
+// while drawing 15 W. Every one multiplies out exactly, and none of their
+// channels was sourcing power outward.
+@Test func aFiveVoltContractReportedLowIsStillACharge() {
+    let realWorld = [
+        (voltageMV: 4_750, currentMA: 3_000, powerMW: 14_250),  // M1 Pro, M2, M3, M5 Pro
+        (voltageMV: 4_750, currentMA: 1_500, powerMW: 7_125),   // M1
+        (voltageMV: 4_750, currentMA: 500, powerMW: 2_375),     // M3
+    ]
+
+    for figures in realWorld {
+        let candidate = contract(
+            powerMW: figures.powerMW,
+            voltageMV: figures.voltageMV,
+            currentMA: figures.currentMA
+        )
+        #expect(
+            SMCContractAttribution.isPlausibleIncomingContract(candidate),
+            "\(figures.voltageMV) mV at \(figures.currentMA) mA is a real 5 V charge"
+        )
+    }
+}
+
+// The label rule is what rejects the Mac sourcing power outward, not the floor.
+// One of the six 4750 mV rows is labelled this way, and it must stay rejected
+// now that the floor no longer happens to catch it.
+//
+// Asserting the rejection alone would prove nothing: it also passed under the
+// old 5000 floor, which rejected the row before the label was ever consulted.
+// So the same figures are asserted to pass WITHOUT the label first.
+@Test func aLowVoltageChannelSourcingPowerOutwardIsStillRejected() {
+    let figures = (powerMW: 14_250, voltageMV: 4_750, currentMA: 3_000)
+
+    #expect(SMCContractAttribution.isPlausibleIncomingContract(
+        contract(powerMW: figures.powerMW, voltageMV: figures.voltageMV, currentMA: figures.currentMA)
+    ), "the label must be the only thing rejecting this")
+
+    #expect(!SMCContractAttribution.isPlausibleIncomingContract(
+        contract(powerMW: figures.powerMW, voltageMV: figures.voltageMV, currentMA: figures.currentMA, label: "usb host")
+    ))
+}
+
+// A label is thin evidence of direction: only 1 of 463 corpus contracts carries
+// one, so an outgoing channel is far likelier to be unlabelled. A measured
+// outgoing draw on the same channel is not thin, and it is what closes the case
+// lowering the floor would otherwise open.
+@Test func anUnlabelledChannelFeedingAPeripheralIsRejected() {
+    let figures = contract(powerMW: 14_250, voltageMV: 4_750, currentMA: 3_000)
+
+    // Same channel, drawing nothing out: a charge.
+    #expect(SMCContractAttribution.isPlausibleIncomingContract(
+        figures,
+        powerOut: SMCPortPowerInput(present: false, volts: 0, amps: 0, uuid: portUUIDNormalised)
+    ))
+
+    // Same channel, measurably sourcing 15 W: the Mac feeding something.
+    #expect(!SMCContractAttribution.isPlausibleIncomingContract(
+        figures,
+        powerOut: SMCPortPowerInput(present: true, volts: 5.0, amps: 3.0, uuid: portUUIDNormalised)
+    ))
+
+    // Idle-channel noise must not read as sourcing.
+    #expect(SMCContractAttribution.isPlausibleIncomingContract(
+        figures,
+        powerOut: SMCPortPowerInput(present: true, volts: 5.0, amps: 0.01, uuid: portUUIDNormalised)
+    ))
+}
+
+// Both constants are load-bearing and neither was pinned: review showed the
+// floor could drift from 4500 to 4000, and the tolerance from 2% to nearly 20%,
+// without a single test noticing. These fix them to their documented values.
+@Test func theVoltageFloorSitsWhereItIsDocumented() {
+    #expect(SMCContractAttribution.isPlausibleIncomingContract(
+        contract(powerMW: 13_500, voltageMV: 4_500, currentMA: 3_000)
+    ), "4500 mV is the floor and must be accepted")
+
+    #expect(!SMCContractAttribution.isPlausibleIncomingContract(
+        contract(powerMW: 13_497, voltageMV: 4_499, currentMA: 3_000)
+    ), "one millivolt below the floor must be rejected")
+}
+
+@Test func theConsistencyToleranceSitsWhereItIsDocumented() {
+    // 1.9% out: inside the band.
+    #expect(SMCContractAttribution.isInternallyConsistent(
+        contract(powerMW: 100_000, voltageMV: 20_000, currentMA: 5_095)
+    ))
+    // 2.1% out: outside it.
+    #expect(!SMCContractAttribution.isInternallyConsistent(
+        contract(powerMW: 100_000, voltageMV: 20_000, currentMA: 5_105)
+    ))
+}
+
+// The floor still has a job: nothing in the corpus sits between 0 and 4750, so
+// anything under the tolerance band is a channel that did not read.
+@Test func aVoltageBelowTheToleranceBandIsStillRejected() {
+    #expect(!SMCContractAttribution.isPlausibleIncomingContract(
+        contract(powerMW: 14_250, voltageMV: 3_300, currentMA: 4_318)
+    ))
+    #expect(!SMCContractAttribution.isPlausibleIncomingContract(
+        contract(powerMW: 14_250, voltageMV: 0, currentMA: 3_000)
+    ))
+}
+
+// Power, voltage and current are three independent SMC reads. A partial read
+// pairs a plausible wattage with a voltage that does not multiply out, which is
+// what actually distinguishes a half-read channel from a low-voltage charge.
+@Test func figuresThatDoNotMultiplyOutAreRejected() {
+    // Plausible voltage and a real-looking wattage, but they disagree: 20 V at
+    // 5 A is 100 W, not 14.25 W.
+    #expect(!SMCContractAttribution.isPlausibleIncomingContract(
+        contract(powerMW: 14_250, voltageMV: 20_000, currentMA: 5_000)
+    ))
+    // A current that never landed cannot corroborate anything.
+    #expect(!SMCContractAttribution.isPlausibleIncomingContract(
+        contract(powerMW: 100_000, voltageMV: 20_000, currentMA: 0)
+    ))
+    // The SMC rounds each figure separately, so exact agreement is not required.
+    #expect(SMCContractAttribution.isInternallyConsistent(
+        contract(powerMW: 100_000, voltageMV: 20_000, currentMA: 4_950)
+    ))
+    #expect(!SMCContractAttribution.isInternallyConsistent(
+        contract(powerMW: 100_000, voltageMV: 20_000, currentMA: 4_000)
+    ))
+}
+
+// The real contracts already asserted elsewhere in this file must keep passing:
+// this Mac's own 20 V / 4.7 A / 94 W, and the 100 W fixture used throughout.
+@Test func ordinaryLaptopChargersStillPass() {
+    #expect(SMCContractAttribution.isPlausibleIncomingContract(
+        contract(powerMW: 94_000, voltageMV: 20_000, currentMA: 4_700)
+    ))
+    #expect(SMCContractAttribution.isPlausibleIncomingContract(
+        contract(powerMW: 100_000, voltageMV: 20_000, currentMA: 5_000)
+    ))
+    // 28 V, the highest rail in the corpus.
+    #expect(SMCContractAttribution.isPlausibleIncomingContract(
+        contract(powerMW: 140_000, voltageMV: 28_000, currentMA: 5_000)
+    ))
+}

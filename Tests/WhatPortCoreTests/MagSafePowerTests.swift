@@ -338,3 +338,72 @@ private func magSafePort(_ manager: PortManager) -> PortState? {
     #expect(power?.configuredVoltage == 0)
     #expect(power?.configuredCurrent == 0)
 }
+
+// MARK: - USB-C evidence must respect direction too (DAR-247)
+
+// The SMC-evidence question ("is USB-C the connector being fed?") has to ask
+// the same thing the attribution path asks. It reads a USB-C contract channel,
+// and a channel that is actually SOURCING power to a peripheral is not evidence
+// of USB-C being fed. Getting this wrong blanks a MagSafe port that really is
+// delivering, because the machine's power-in is held back for a USB-C port that
+// is doing the opposite.
+//
+// This goes through correlate rather than calling the rule directly on purpose:
+// the rule takes the channel readings as a defaulted argument, so a call site
+// that forgets to pass them still compiles and silently asks the weaker
+// question. Only an end-to-end test catches that, and it did: the argument was
+// missing at exactly this call site until review found it.
+@Test func aUSBCChannelFeedingAPeripheralIsNotEvidenceOfCharging() {
+    let uuid = "CCCC-1"
+    let normalised = SMCContractAttribution.normalisedUUID(uuid)
+
+    func snapshot(powerOut: [SMCPortPowerInput]) -> PortManagerSnapshot {
+        PortManagerSnapshot(
+            hpmPorts: [
+                HPMPortInput(uuid: uuid, portNumber: 1, portType: "USB-C"),
+                HPMPortInput(uuid: "BBBB-1", portNumber: 1, portType: "MagSafe 3")
+            ],
+            ccData: [
+                CCInput(portNumber: 1, portType: "USB-C", active: true),
+                CCInput(portNumber: 1, portType: "MagSafe 3", active: true)
+            ],
+            chargingPower: ChargingPowerInput(
+                systemPowerIn: 5_600,
+                systemVoltageIn: 20_000,
+                systemCurrentIn: 280,
+                isCharging: true,
+                fullyCharged: false
+            ),
+            smcPortPower: powerOut,
+            // A USB-C channel carrying what looks like an incoming contract.
+            smcPortContracts: [
+                SMCPortContractInput(
+                    channel: 1,
+                    uuid: normalised,
+                    powerMW: 15_000,
+                    voltageMV: 5_000,
+                    currentMA: 3_000,
+                    label: ""
+                )
+            ]
+        )
+    }
+
+    // Nothing flowing out: the contract is evidence USB-C is being fed, so
+    // MagSafe is not treated as the delivering connector.
+    let fed = PortManager()
+    fed.applySnapshot(snapshot(powerOut: []))
+    #expect(magSafePort(fed)?.power?.watts == nil, "USB-C is being fed, so MagSafe holds no figure")
+
+    // Same channel, measurably sourcing 15 W to a peripheral. That is the Mac
+    // feeding something, not being fed, so MagSafe is the delivering connector
+    // and must carry the machine's power-in.
+    let sourcing = PortManager()
+    sourcing.applySnapshot(snapshot(powerOut: [
+        SMCPortPowerInput(present: true, volts: 5.0, amps: 3.0, uuid: normalised)
+    ]))
+    #expect(
+        magSafePort(sourcing)?.power?.direction == .incoming,
+        "MagSafe is delivering; a USB-C port feeding a peripheral is not evidence otherwise"
+    )
+}
