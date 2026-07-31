@@ -28,9 +28,12 @@ Free and open source. Apple Silicon only (M1 and later).
 - **Cable info** showing cable type and USB PD revision
 - **Liquid detection** flagging a wet port (M3 and later)
 - **Thunderbolt capability** showing max supported speed and lane width per port
-- **Port statistics** with lifetime connection counts and error tracking
+- **Port statistics** with lifetime connection counts and error tracking, readable whether or not anything is plugged in
 - **MagSafe support** with charging status and power draw
-- **Menu and shortcuts** with a right-click menu for Settings, GitHub, About, and Quit, plus the standard Cmd+, and Cmd+Q
+- **Built-in updates** with a banner when a new version is out and a one-click install, after checking the download is signed and notarised by Apple
+- **Menu bar or Dock** with an optional window mode, and an optional port count next to the menu bar icon
+- **Adjustable text size** scaling every panel, for high-resolution displays where the default feels small
+- **Menu and shortcuts** with a right-click menu for Settings, Check for Updates, GitHub, About, and Quit, plus the standard Cmd+, and Cmd+Q
 
 ## WhatPort Pro: the Flight Recorder
 
@@ -93,18 +96,24 @@ WhatPort correlates several unprivileged IOKit and SMC services per physical por
 
 Connection events are detected via IOKit interest notifications for sub-second response. All state (connections, power, transports) is also polled every second as a safety net.
 
-No analytics, no telemetry, no network requests. The app reads local IOKit data and nothing else.
+No analytics, no telemetry. The app reads local IOKit data and nothing else. The one network request it makes is the update check: it asks the GitHub releases API whether a newer version exists, and downloads it only if you click Update.
 
 ## Architecture
 
-Three layers, each depending only on the one below:
+Layered, each layer depending only on the ones below it:
 
 ```
-SwiftUI (WhatPort)  ->  Domain (WhatPortCore)  ->  IOKit (WhatPortIOKit)
+WhatPort           SwiftUI app
+  ├─ WhatPortPlugins   Pro features (a stub in this open-source build)
+  ├─ WhatPortAppKit    plugin registry, wires Pro into the app
+  ├─ WhatPortIOKit     all IOKit C API interaction
+  └─ WhatPortCore      pure-Swift domain model
 ```
 
-- **WhatPortIOKit**: All IOKit C API interaction. Nothing above this layer touches C pointers or IORegistry.
 - **WhatPortCore**: Pure Swift domain model and correlation logic. No IOKit or UI imports.
+- **WhatPortIOKit**: All IOKit C API interaction. Nothing above this layer touches C pointers or IORegistry.
+- **WhatPortAppKit**: The plugin registry that lets the Pro half attach to the app.
+- **WhatPortPlugins**: The Flight Recorder and licensing. In this repository it is a stub with an empty `bootstrapPlugins()`, so the app builds and runs without it.
 - **WhatPort**: SwiftUI views and formatting. No data fetching or business logic.
 
 ## License

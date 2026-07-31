@@ -96,7 +96,7 @@
           "name": "Does it phone home?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. There are no analytics, no telemetry, and no network requests. The app reads local IOKit data and nothing else. The source is on GitHub if you want to verify."
+            "text": "No analytics, no telemetry. The app reads local IOKit data and nothing else. The one network request it makes is the update check: it asks the GitHub releases API whether a newer version exists, and downloads it only if you click Update. The source is on GitHub if you want to verify."
           }
         },
         {
@@ -553,7 +553,8 @@
         line-height: 1.55;
       }
 
-      .how-card code {
+      .how-card code,
+      .feature code {
         padding: 1px 6px;
         border-radius: 4px;
         background: var(--line-soft);
@@ -1094,6 +1095,22 @@
             <h3>Liquid detection</h3>
             <p>Flags a wet port before corrosion sets in, with advice to disconnect and dry it out (M3 and later).</p>
           </article>
+
+          <article class="feature">
+            <div class="icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </div>
+            <h3>Built-in updates</h3>
+            <p>A banner when a new version is out, and one click installs it. WhatPort checks the download is signed and notarised by Apple before it swaps itself over. Homebrew users can carry on with <code>brew upgrade</code>.</p>
+          </article>
+
+          <article class="feature">
+            <div class="icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+            </div>
+            <h3>Set up how you like it</h3>
+            <p>Live in the menu bar or run as a normal app with a Dock icon and a window. Show the port count next to the icon or hide it. Scale the text across every panel when the default is too small.</p>
+          </article>
         </div>
       </div>
     </section>
@@ -1262,7 +1279,7 @@
           </div>
           <div class="faq-item">
             <h3>Does it phone home?</h3>
-            <p>No. There are no analytics, no telemetry, and no network requests. The app reads local IOKit data and nothing else. The source is on GitHub if you want to verify.</p>
+            <p>No analytics, no telemetry. The app reads local IOKit data and nothing else. The one network request it makes is the update check: it asks the GitHub releases API whether a newer version exists, and downloads it only if you click Update. The source is on GitHub if you want to verify.</p>
           </div>
           <div class="faq-item">
             <h3>How does the two-Mac licence work?</h3>
