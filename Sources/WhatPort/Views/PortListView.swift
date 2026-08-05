@@ -117,6 +117,11 @@ struct PortListView: View {
                             .scaledFont(.footnote)
                             .foregroundStyle(.secondary)
                     }
+                    if !systemWallPowerLabel.isEmpty {
+                        Text(systemWallPowerLabel)
+                            .scaledFont(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
@@ -140,6 +145,18 @@ struct PortListView: View {
         case (false, false):
             return ""
         }
+    }
+
+    // Desktop Macs (Mac mini / Studio / Pro) have no battery controller, so
+    // chargingStatus is always nil and headerPowerLabel's "X W in" never
+    // fires for them even while genuinely drawing wall power. Gated on
+    // chargingStatus == nil so a laptop, which already shows that figure via
+    // headerPowerLabel, never displays it twice.
+    private var systemWallPowerLabel: String {
+        guard portManager.chargingStatus == nil,
+              let watts = portManager.systemWallPowerWatts, watts > 0
+        else { return "" }
+        return WattsFormat.string(watts) + " from wall"
     }
 
     private var emptyState: some View {

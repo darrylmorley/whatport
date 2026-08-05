@@ -137,8 +137,8 @@ struct PortDetailView: View {
                 // resolution still gets a card rather than floating loose.
                 sectionCard { displayResolutionRow }
             }
-            if let dp = dpTransport {
-                sectionCard { displaySection(dp) }
+            if dpTransport != nil || !port.dpTunnelLinkRate.isEmpty {
+                sectionCard { displaySection(dpTransport) }
             }
             connectionsCard
             if let cap = port.thunderboltCapability {
@@ -162,8 +162,8 @@ struct PortDetailView: View {
             } else if port.displayWidth > 0 && port.displayHeight > 0 {
                 sectionCard { displayResolutionRow }
             }
-            if let dp = dpTransport {
-                sectionCard { displaySection(dp) }
+            if dpTransport != nil || !port.dpTunnelLinkRate.isEmpty {
+                sectionCard { displaySection(dpTransport) }
             }
             connectionsCard
             sectionCard { laneInfoSection }
@@ -215,6 +215,9 @@ struct PortDetailView: View {
                 if !device.usbVersion.isEmpty {
                     LabeledValue(label: "Version", value: device.usbVersion)
                 }
+                if let deviceClass = device.deviceClass {
+                    LabeledValue(label: "Type", value: deviceClass.label)
+                }
                 if device.currentDraw > 0 {
                     LabeledValue(label: "Power Draw", value: "\(device.currentDraw) mA")
                 }
@@ -256,27 +259,39 @@ struct PortDetailView: View {
     // Answers "is my display running at full quality?" - link rate, lane
     // allocation, native vs tunnelled, daisy-chained displays, and any
     // converter chip (MST hub / HDMI) in the path.
+    //
+    // dp is nil when there is no live DisplayPort transport node yet but the
+    // PHY still reports a tunnelled link rate (dpTunnelLinkRate) -- the
+    // caller only builds this card when at least one of the two is present,
+    // so the row-level fallback below always has something to show.
     @ViewBuilder
-    private func displaySection(_ dp: LiveTransport) -> some View {
+    private func displaySection(_ dp: LiveTransport?) -> some View {
+        let linkRate = Self.displayLinkRateText(liveDataRate: dp?.dataRate ?? "", dpTunnelLinkRate: port.dpTunnelLinkRate)
+
         VStack(alignment: .leading, spacing: 4) {
             sectionHeader("Display link")
 
             HStack(spacing: 12) {
-                if !dp.dataRate.isEmpty {
-                    LabeledValue(label: "Link rate", value: dp.dataRate)
+                if !linkRate.isEmpty {
+                    LabeledValue(label: "Link rate", value: linkRate)
                 }
-                if dp.maxLaneCount > 0 {
+                if let dp, dp.maxLaneCount > 0 {
                     LabeledValue(label: "Lanes", value: "\(dp.laneCount) of \(dp.maxLaneCount)")
                 }
+                // dpTunnelLinkRate only ever comes from a DP link tunnelled
+                // over CIO, so the no-live-transport case is tunnelled by
+                // definition -- the "?? true" default only applies then.
                 LabeledValue(
                     label: "Connection",
-                    value: dp.tunneled ? "Tunnelled (Thunderbolt)" : "Native DP Alt Mode"
+                    value: (dp?.tunneled ?? true) ? "Tunnelled (Thunderbolt)" : "Native DP Alt Mode"
                 )
             }
 
             // Second row only renders when there is something extra to say
             // (multiple displays, a converter, or an MST hub in the chain).
-            if dp.sinkCount > 1 || !dp.dfpType.isEmpty || !dp.branchDevice.isEmpty {
+            // These all come from the live transport node, so there is
+            // nothing to show here in the no-live-transport fallback case.
+            if let dp, dp.sinkCount > 1 || !dp.dfpType.isEmpty || !dp.branchDevice.isEmpty {
                 HStack(spacing: 12) {
                     if dp.sinkCount > 1 {
                         LabeledValue(label: "Displays", value: "\(dp.sinkCount)")
@@ -290,6 +305,18 @@ struct PortDetailView: View {
                 }
             }
         }
+    }
+
+    // Which link-rate string the display card should show: the live DP
+    // transport's data rate when present (already formatted, e.g. "10
+    // Gbps"), else the PHY tunnel fallback (raw, e.g. "5.40Gbps/lane
+    // (HBR2)", reformatted via LaneBar.formatDPLinkRate), else empty when
+    // neither source has anything. Pulled out of displaySection so the
+    // decision is a single pure function instead of buried in the view body.
+    static func displayLinkRateText(liveDataRate: String, dpTunnelLinkRate: String) -> String {
+        if !liveDataRate.isEmpty { return liveDataRate }
+        if !dpTunnelLinkRate.isEmpty { return LaneBar.formatDPLinkRate(dpTunnelLinkRate) }
+        return ""
     }
 
     // MARK: - Connections (provisioned / blocked / tunnelled transports)
@@ -417,6 +444,16 @@ struct PortDetailView: View {
             Text("\(stats.connectCount) connections")
                 .scaledFont(.footnote)
                 .foregroundStyle(.secondary)
+            // Remote wake is a normal event (the device woke the Mac), not a
+            // fault, so it gets its own clause rather than joining errorSummary.
+            if stats.remoteWakeCount > 0 {
+                Text("\u{00B7}")
+                    .scaledFont(.footnote)
+                    .foregroundStyle(.tertiary)
+                Text("\(stats.remoteWakeCount) remote wakes")
+                    .scaledFont(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             Text("\u{00B7}")
                 .scaledFont(.footnote)
                 .foregroundStyle(.tertiary)
@@ -534,7 +571,9 @@ struct PortDetailView: View {
                     if power.configuredVoltage > 0 || power.configuredCurrent > 0 {
                         LabeledValue(
                             label: "Contract",
-                            value: "\(formatVolts(power.configuredVoltage)) / \(formatAmps(power.configuredCurrent))"
+                            value: "\(formatVolts(power.configuredVoltage)) / \(formatAmps(power.configuredCurrent))",
+                            annotation: power.contractIsEstimated ? "Estimated" : nil,
+                            annotationHelp: "This Mac does not publish this port's own contract; based on a live reading attributed to this port"
                         )
                     }
                     if power.vconnCurrent > 0 {
@@ -543,6 +582,17 @@ struct PortDetailView: View {
                             value: "\(power.vconnCurrent) mA"
                         )
                     }
+                }
+                // A powered (active) cable draws current over VConn to run its
+                // e-marker chip. Purely factual: whether the cable is good or
+                // bad is WhatCable's call, not this app's.
+                if power.vconnCurrent > 0 {
+                    Text("Active (powered) cable")
+                        .scaledFont(.footnote, weight: .medium)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.12), in: Capsule())
                 }
             } else if chargingStatus != nil, showsChargingStatus {
                 // The charging-status line above already explains this port's
@@ -918,6 +968,9 @@ struct LaneBar: View {
             }
             // Prefer live USB3 transport data, fall back to device speed
             if let lt = liveTransport, !lt.dataRate.isEmpty {
+                if !lt.generation.isEmpty {
+                    return "USB3 \u{00B7} \(lt.dataRate) \u{00B7} \(lt.generation)"
+                }
                 return "USB3 \u{00B7} \(lt.dataRate)"
             }
             return "USB3"
@@ -973,12 +1026,24 @@ struct USB2Bar: View {
 struct LabeledValue: View {
     let label: String
     let value: String
+    // Optional short marker next to the label (e.g. "Estimated"), with a
+    // tooltip explaining it. nil hides the marker entirely.
+    var annotation: String? = nil
+    var annotationHelp: String = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .scaledFont(.footnote)
-                .foregroundStyle(.secondary)
+            HStack(spacing: 4) {
+                Text(label)
+                    .scaledFont(.footnote)
+                    .foregroundStyle(.secondary)
+                if let annotation {
+                    Text(annotation)
+                        .scaledFont(.footnote)
+                        .foregroundStyle(.tertiary)
+                        .help(annotationHelp)
+                }
+            }
             Text(value)
                 .scaledFont(.subheadline, weight: .medium)
                 .foregroundStyle(.primary)

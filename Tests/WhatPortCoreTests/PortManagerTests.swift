@@ -70,7 +70,9 @@ import Testing
                 adapterVoltage: 5200,
                 configuredVoltage: 5000,
                 configuredCurrent: 1500,
-                vconnCurrent: 14
+                vconnCurrent: 14,
+                vconnPower: 350,
+                vconnMaxCurrent: 1000
             )
         ],
         powerMeteringAvailable: true
@@ -83,6 +85,11 @@ import Testing
     #expect(port.power?.watts == 5.9)
     #expect(port.power?.current == 113)
     #expect(port.power?.voltage == 5200)
+    // VConn power/current round-trip through PowerInput -> PortPower.
+    #expect(port.power?.vconnPower == 350)
+    #expect(port.power?.vconnMaxCurrent == 1000)
+    // Read straight from PowerOutDetails, macOS's own measurement.
+    #expect(port.power?.contractIsEstimated == false)
     #expect(manager.powerMeteringAvailable)
 }
 
@@ -615,6 +622,66 @@ import Testing
     #expect(dp?.dfpType == "HDMI")
 }
 
+// The USB3 generation label ("Gen 2") round-trips from USB3TransportInput
+// alongside the data rate, into the port's LiveTransport entry.
+@Test func portManagerCarriesUSB3Generation() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        phyData: [PhyInput(phyID: 0, portNumber: 1, lane0Transport: "USB3", lane0PowerLevel: "on")],
+        tbData: [ThunderboltInput(socketID: 1)],
+        usb3Transport: [
+            USB3TransportInput(portNumber: 1, active: true, dataRate: "10 Gbps", generation: "Gen 2")
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+    let usb3 = manager.ports.first { $0.id == 1 }?.liveTransports.first { $0.kind == .usb }
+
+    #expect(usb3?.dataRate == "10 Gbps")
+    #expect(usb3?.generation == "Gen 2")
+}
+
+// bDeviceClass decodes onto USBDeviceInfo.deviceClass through the
+// correlation path, and a per-interface/unmapped class (0x00) stays nil.
+@Test func portManagerDecodesDeviceClass() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        phyData: [PhyInput(phyID: 0, portNumber: 1)],
+        tbData: [ThunderboltInput(socketID: 1)],
+        deviceData: [DeviceInput(portNumber: 1, productName: "Hub", deviceClass: 0x09)]
+    )
+
+    manager.applySnapshot(snapshot)
+    #expect(manager.ports.first { $0.id == 1 }?.usbDevice?.deviceClass == .hub)
+
+    let unmappedSnapshot = PortManagerSnapshot(
+        phyData: [PhyInput(phyID: 0, portNumber: 1)],
+        tbData: [ThunderboltInput(socketID: 1)],
+        deviceData: [DeviceInput(portNumber: 1, productName: "Mystery Device", deviceClass: 0x00)]
+    )
+
+    manager.applySnapshot(unmappedSnapshot)
+    #expect(manager.ports.first { $0.id == 1 }?.usbDevice?.deviceClass == nil)
+}
+
+// DP tunnel link rate (from PHY tunnel data) flows onto PortState even when
+// no live DP transport node is present, so the UI has a fallback to show.
+@Test func portManagerCarriesDPTunnelLinkRate() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        phyData: [PhyInput(phyID: 0, portNumber: 1, dpTunnel: "5.40Gbps/lane (HBR2)")],
+        tbData: [ThunderboltInput(socketID: 1)]
+    )
+
+    manager.applySnapshot(snapshot)
+    let port = manager.ports.first { $0.id == 1 }
+
+    #expect(port?.dpTunnelLinkRate == "5.40Gbps/lane (HBR2)")
+}
+
 // The connected Thunderbolt device's identity (from the CIO node) is stamped
 // onto the active TB link.
 @Test func portManagerNamesConnectedThunderboltDevice() {
@@ -722,6 +789,64 @@ import Testing
         tbData: [ThunderboltInput(socketID: 1)]
     ))
     #expect(manager.chargingStatus == nil)
+}
+
+// systemWallPowerWatts is set straight from the snapshot, like isCharging and
+// chargingStatus -- it is not a per-port figure, so correlate() must never
+// touch it, and it must survive a snapshot with no ports at all (a desktop
+// mid-scan).
+@Test func portManagerSetsSystemWallPowerFromSnapshot() {
+    let manager = PortManager()
+
+    manager.applySnapshot(PortManagerSnapshot(
+        phyData: [PhyInput(phyID: 0, portNumber: 1)],
+        tbData: [ThunderboltInput(socketID: 1)],
+        systemPower: SystemPowerInput(watts: 142.0, volts: 20.0, amps: 7.1)
+    ))
+
+    #expect(manager.systemWallPowerWatts == 142.0)
+    // Untouched by correlate(): the port itself carries no power reading.
+    #expect(manager.ports.first?.power == nil)
+
+    // No systemPower on the snapshot -> nil, not a stale carry-over.
+    manager.applySnapshot(PortManagerSnapshot(
+        phyData: [PhyInput(phyID: 0, portNumber: 1)],
+        tbData: [ThunderboltInput(socketID: 1)]
+    ))
+    #expect(manager.systemWallPowerWatts == nil)
+}
+
+// controllerPower is set straight from the snapshot, like systemWallPowerWatts:
+// it is machine-wide, not per-port, so correlate() must never touch it. This
+// is reader-only plumbing for a future feature; nothing consumes the value
+// yet, so this only pins that it survives the round trip through applySnapshot.
+@Test func portManagerStoresControllerPowerFromSnapshot() {
+    let manager = PortManager()
+
+    manager.applySnapshot(PortManagerSnapshot(
+        phyData: [PhyInput(phyID: 0, portNumber: 1)],
+        tbData: [ThunderboltInput(socketID: 1)],
+        controllerPower: ControllerPowerInput(
+            anyThunderboltControllerAwake: true,
+            anyXHCIControllerAwake: false,
+            thunderboltControllerCount: 2,
+            xhciControllerCount: 1
+        )
+    ))
+
+    #expect(manager.controllerPower?.anyThunderboltControllerAwake == true)
+    #expect(manager.controllerPower?.anyXHCIControllerAwake == false)
+    #expect(manager.controllerPower?.thunderboltControllerCount == 2)
+    #expect(manager.controllerPower?.xhciControllerCount == 1)
+    // Untouched by correlate(): the port itself carries no controller data.
+    #expect(manager.ports.first?.power == nil)
+
+    // No controllerPower on the snapshot -> nil, not a stale carry-over.
+    manager.applySnapshot(PortManagerSnapshot(
+        phyData: [PhyInput(phyID: 0, portNumber: 1)],
+        tbData: [ThunderboltInput(socketID: 1)]
+    ))
+    #expect(manager.controllerPower == nil)
 }
 
 // Without HPM data (Intel / desktop / tests), ports still correlate by number

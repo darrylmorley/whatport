@@ -1,5 +1,6 @@
 import Foundation
 import IOKit
+import WhatPortCore
 
 // Type-safe wrappers for IOKit registry property values.
 //
@@ -245,6 +246,13 @@ func ioClassName(_ service: io_service_t) -> String? {
 //
 // The closure receives each service. Services are released automatically
 // after the closure returns (via defer + IOObjectRelease).
+//
+// The registry can mutate mid-walk (a device plugs or unplugs while we're
+// reading it), which makes IOIteratorNext return 0 exactly as if the walk
+// had finished, silently truncating the results. Collecting the service
+// handles through IteratorWalkRetry catches that: an invalidated attempt's
+// handles are released and the walk is retried, bounded so continuous
+// plug/unplug activity can't loop forever.
 func withMatchingServices(
     className: String,
     body: (io_service_t) -> Void
@@ -255,8 +263,24 @@ func withMatchingServices(
     guard kr == KERN_SUCCESS else { return }
     defer { IOObjectRelease(iter) }
 
-    while case let service = IOIteratorNext(iter), service != 0 {
+    let services = IteratorWalkRetry.retry(
+        isValid: { IOIteratorIsValid(iter) != 0 },
+        reset: { IOIteratorReset(iter) },
+        discard: { IOObjectRelease($0) },
+        walk: { collectIteratorServices(iter) }
+    )
+
+    for service in services {
         defer { IOObjectRelease(service) }
         body(service)
     }
+}
+
+// Drain an iterator into an array of service handles.
+private func collectIteratorServices(_ iter: io_iterator_t) -> [io_service_t] {
+    var services: [io_service_t] = []
+    while case let service = IOIteratorNext(iter), service != 0 {
+        services.append(service)
+    }
+    return services
 }

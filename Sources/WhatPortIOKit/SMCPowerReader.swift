@@ -184,12 +184,18 @@ public final class SMCPowerReader: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard openLocked() else { return nil }
+        return Self.buildSystemPowerInput(readKey: { self.readKey($0) })
+    }
 
-        let volts = readFloat("VD0R")
-        let amps = readFloat("ID0R")
+    // The DC-in rules, given a way to read a key's bytes. Same seam as
+    // buildPortPowerChannels/buildPortContracts, so the PDTR-vs-volts*amps
+    // fallback can be pinned in a decode test without opening the SMC.
+    static func buildSystemPowerInput(readKey: (String) -> [UInt8]?) -> RawSMCSystemPower? {
+        let volts = readKey("VD0R").flatMap(decodeFloat)
+        let amps = readKey("ID0R").flatMap(decodeFloat)
         guard volts != nil || amps != nil else { return nil }
 
-        let watts = readFloat("PDTR").map(Double.init) ?? (Double(volts ?? 0) * Double(amps ?? 0))
+        let watts = readKey("PDTR").flatMap(decodeFloat).map(Double.init) ?? (Double(volts ?? 0) * Double(amps ?? 0))
         return RawSMCSystemPower(
             volts: Double(volts ?? 0),
             amps: Double(amps ?? 0),
@@ -198,11 +204,6 @@ public final class SMCPowerReader: @unchecked Sendable {
     }
 
     // MARK: - Key reads
-
-    private func readFloat(_ key: String) -> Float? {
-        guard let bytes = readKey(key) else { return nil }
-        return Self.decodeFloat(bytes)
-    }
 
     // Decode an SMC `flt` payload (4-byte IEEE float, little-endian on Apple
     // Silicon). Returns nil for short payloads and non-finite values: an

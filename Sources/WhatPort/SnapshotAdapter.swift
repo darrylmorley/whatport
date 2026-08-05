@@ -35,7 +35,8 @@ enum SnapshotAdapter {
                     lane1PowerLevel: phy.lane1PowerLevel,
                     lane1Client: phy.lane1Client,
                     usb2Transport: phy.usb2Transport,
-                    dpLinkRate: phy.dpLinkRate
+                    dpLinkRate: phy.dpLinkRate,
+                    dpTunnel: phy.dpTunnel
                 )
             },
             tbData: snapshot.thunderboltData.compactMap { tb in
@@ -58,7 +59,9 @@ enum SnapshotAdapter {
                     adapterVoltage: pwr.adapterVoltage,
                     configuredVoltage: pwr.configuredVoltage,
                     configuredCurrent: pwr.configuredCurrent,
-                    vconnCurrent: pwr.vconnCurrent
+                    vconnCurrent: pwr.vconnCurrent,
+                    vconnPower: pwr.vconnPower,
+                    vconnMaxCurrent: pwr.vconnMaxCurrent
                 )
             },
             ccData: snapshot.ccData.map { cc in
@@ -97,6 +100,7 @@ enum SnapshotAdapter {
                     vendorName: d.vendorName,
                     speedCode: d.speedCode,
                     usbVersion: d.usbVersion,
+                    deviceClass: d.deviceClass,
                     currentDraw: d.currentDraw,
                     serialNumber: d.serialNumber
                 )
@@ -173,6 +177,17 @@ enum SnapshotAdapter {
                     voltageMV: c.voltageMV,
                     currentMA: c.currentMA,
                     label: c.label
+                )
+            },
+            systemPower: snapshot.smcSystemPower.map { sp in
+                SystemPowerInput(watts: sp.watts, volts: sp.volts, amps: sp.amps)
+            },
+            controllerPower: snapshot.controllerPower.map { cp in
+                ControllerPowerInput(
+                    anyThunderboltControllerAwake: cp.anyThunderboltControllerAwake,
+                    anyXHCIControllerAwake: cp.anyXHCIControllerAwake,
+                    thunderboltControllerCount: cp.thunderboltControllerCount,
+                    xhciControllerCount: cp.xhciControllerCount
                 )
             }
         )

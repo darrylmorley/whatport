@@ -160,4 +160,35 @@ struct PhyCorpusSweepTests {
         #expect(missed.isEmpty, "\(missed.count) link rates not found: \(missed.prefix(5))")
         #expect(found == recorded)
     }
+
+    // Mirrors the PCLK sweep above, but for DisplayPort tunnelled over CIO,
+    // which the reader hunts for under "Tunnel 0", "Tunnel 1"... in a
+    // separate dictionary from native alt-mode's PCLK data.
+    @Test("A DP tunnel link rate is found wherever one was recorded", .enabled(if: ProbeCorpus.isAvailable))
+    func dpTunnelLinkRateIsFoundWhereverRecorded() throws {
+        var recorded = 0
+        var found = 0
+        var missed: [String] = []
+
+        for machine in Self.sweep() {
+            for (block, phy) in zip(machine.blocks, machine.parsed) {
+                let tunnel = block["AppleTypeCPhyDisplayPortTunnel"] as? [String: Any] ?? [:]
+                let anyRate = tunnel.values
+                    .compactMap { ($0 as? [String: Any])?["Link Rate"] as? String }
+                    .first { !$0.isEmpty }
+
+                guard let anyRate else { continue }
+                recorded += 1
+                if phy.dpTunnel.isEmpty {
+                    missed.append("\(machine.name) phy\(phy.phyID): recorded \(anyRate), read nothing")
+                } else {
+                    found += 1
+                }
+            }
+        }
+
+        try #require(recorded > 10, "Expected machines with a tunnelled DP link, got \(recorded)")
+        #expect(missed.isEmpty, "\(missed.count) tunnel link rates not found: \(missed.prefix(5))")
+        #expect(found == recorded)
+    }
 }

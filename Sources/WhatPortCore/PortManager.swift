@@ -19,6 +19,20 @@ public final class PortManager: @unchecked Sendable {
     // The Mac's charging status when a charger is connected (nil on battery or
     // on a Mac with no battery controller). Answers "why isn't it charging?".
     public private(set) var chargingStatus: ChargingStatus?
+    // Total wall power the Mac itself is drawing, straight from the SMC.
+    // System-level like isCharging/chargingStatus, and set directly from the
+    // snapshot rather than through correlate(): it isn't attributed to any
+    // one port. Present on desktops too, where chargingStatus is always nil
+    // (no battery controller) but the SMC still reports real wall draw.
+    public private(set) var systemWallPowerWatts: Double?
+
+    // Machine-wide Thunderbolt/XHCI controller power state, set directly from
+    // the snapshot like systemWallPowerWatts, bypassing correlate() (this
+    // isn't per-port data either). Nothing reads this yet: it is the
+    // reader-only half of a future occupancy-confidence feature landing ahead
+    // of the hold/hysteresis logic that will consume it, so the data path is
+    // proven before that logic exists.
+    public private(set) var controllerPower: ControllerPowerInput?
 
     // Power history for sparkline graphs (per port ID)
     public private(set) var powerHistory: [Int: [PowerSample]] = [:]
@@ -48,6 +62,8 @@ public final class PortManager: @unchecked Sendable {
                 notChargingReason: $0.notChargingReason
             )
         }
+        systemWallPowerWatts = snapshot.systemPower?.watts
+        controllerPower = snapshot.controllerPower
 
         let correlated = correlate(
             hpmPorts: snapshot.hpmPorts,
@@ -132,6 +148,8 @@ public struct PortManagerSnapshot: Sendable {
     public let cioTransport: [CIOTransportInput]
     public let smcPortPower: [SMCPortPowerInput]
     public let smcPortContracts: [SMCPortContractInput]
+    public let systemPower: SystemPowerInput?
+    public let controllerPower: ControllerPowerInput?
 
     public init(
         timestamp: Date = .now,
@@ -151,7 +169,9 @@ public struct PortManagerSnapshot: Sendable {
         dpTransport: [DPTransportInput] = [],
         cioTransport: [CIOTransportInput] = [],
         smcPortPower: [SMCPortPowerInput] = [],
-        smcPortContracts: [SMCPortContractInput] = []
+        smcPortContracts: [SMCPortContractInput] = [],
+        systemPower: SystemPowerInput? = nil,
+        controllerPower: ControllerPowerInput? = nil
     ) {
         self.timestamp = timestamp
         self.hpmPorts = hpmPorts
@@ -171,6 +191,8 @@ public struct PortManagerSnapshot: Sendable {
         self.cioTransport = cioTransport
         self.smcPortPower = smcPortPower
         self.smcPortContracts = smcPortContracts
+        self.systemPower = systemPower
+        self.controllerPower = controllerPower
     }
 }
 
@@ -211,6 +233,9 @@ public struct PhyInput: Sendable {
     public let usb2Transport: String
     // DP link rate from PHY pixel clock data, e.g. "5.40Gbps/lane (HBR2)"
     public let dpLinkRate: String
+    // DP tunnel link rate from PHY tunnel data, when DisplayPort is tunnelled
+    // over CIO rather than running native alt mode. Same format as dpLinkRate.
+    public let dpTunnel: String
 
     public init(
         phyID: Int,
@@ -222,7 +247,8 @@ public struct PhyInput: Sendable {
         lane1PowerLevel: String = "",
         lane1Client: String = "",
         usb2Transport: String = "",
-        dpLinkRate: String = ""
+        dpLinkRate: String = "",
+        dpTunnel: String = ""
     ) {
         self.phyID = phyID
         self.portNumber = portNumber
@@ -234,6 +260,7 @@ public struct PhyInput: Sendable {
         self.lane1Client = lane1Client
         self.usb2Transport = usb2Transport
         self.dpLinkRate = dpLinkRate
+        self.dpTunnel = dpTunnel
     }
 }
 
@@ -273,6 +300,8 @@ public struct PowerInput: Sendable {
     public let configuredVoltage: Int
     public let configuredCurrent: Int
     public let vconnCurrent: Int
+    public let vconnPower: Int
+    public let vconnMaxCurrent: Int
 
     public init(
         portIndex: Int,
@@ -281,7 +310,9 @@ public struct PowerInput: Sendable {
         adapterVoltage: Int = 0,
         configuredVoltage: Int = 0,
         configuredCurrent: Int = 0,
-        vconnCurrent: Int = 0
+        vconnCurrent: Int = 0,
+        vconnPower: Int = 0,
+        vconnMaxCurrent: Int = 0
     ) {
         self.portIndex = portIndex
         self.watts = watts
@@ -290,6 +321,8 @@ public struct PowerInput: Sendable {
         self.configuredVoltage = configuredVoltage
         self.configuredCurrent = configuredCurrent
         self.vconnCurrent = vconnCurrent
+        self.vconnPower = vconnPower
+        self.vconnMaxCurrent = vconnMaxCurrent
     }
 }
 
@@ -442,6 +475,46 @@ public struct ChargingPowerInput: Sendable {
     }
 }
 
+// Total system DC-in (wall) power straight from the SMC rails, independent of
+// AppleSmartBattery. System-level, like ChargingPowerInput, but present on
+// desktop Macs too: they have no battery controller, so chargingPower is
+// always nil there even though the SMC still reports real wall draw.
+public struct SystemPowerInput: Sendable {
+    public let watts: Double
+    public let volts: Double
+    public let amps: Double
+
+    public init(watts: Double, volts: Double, amps: Double) {
+        self.watts = watts
+        self.volts = volts
+        self.amps = amps
+    }
+}
+
+// Machine-wide Thunderbolt/XHCI controller power state. Mirrors
+// WhatPortIOKit's RawControllerPower; kept as a separate type here because
+// the domain layer never imports IOKit types. See RawControllerPower for the
+// none-found semantics (nil vs false) and the corpus evidence behind the two
+// booleans.
+public struct ControllerPowerInput: Sendable {
+    public let anyThunderboltControllerAwake: Bool?
+    public let anyXHCIControllerAwake: Bool?
+    public let thunderboltControllerCount: Int
+    public let xhciControllerCount: Int
+
+    public init(
+        anyThunderboltControllerAwake: Bool?,
+        anyXHCIControllerAwake: Bool?,
+        thunderboltControllerCount: Int = 0,
+        xhciControllerCount: Int = 0
+    ) {
+        self.anyThunderboltControllerAwake = anyThunderboltControllerAwake
+        self.anyXHCIControllerAwake = anyXHCIControllerAwake
+        self.thunderboltControllerCount = thunderboltControllerCount
+        self.xhciControllerCount = xhciControllerCount
+    }
+}
+
 // Charger identity from AppleSmartBattery.AdapterDetails. System-level (one
 // active charger); attached in correlation to the port receiving power.
 public struct ChargerIdentityInput: Sendable {
@@ -488,6 +561,7 @@ public struct DeviceInput: Sendable {
     public let vendorName: String
     public let speedCode: Int       // USB Device Speed enum
     public let usbVersion: Int      // bcdUSB (e.g. 800 = USB 3.2)
+    public let deviceClass: Int     // bDeviceClass (8 = storage, etc.)
     public let currentDraw: Int     // mA allocated
     public let serialNumber: String
 
@@ -497,6 +571,7 @@ public struct DeviceInput: Sendable {
         vendorName: String = "",
         speedCode: Int = 0,
         usbVersion: Int = 0,
+        deviceClass: Int = 0,
         currentDraw: Int = 0,
         serialNumber: String = ""
     ) {
@@ -505,6 +580,7 @@ public struct DeviceInput: Sendable {
         self.vendorName = vendorName
         self.speedCode = speedCode
         self.usbVersion = usbVersion
+        self.deviceClass = deviceClass
         self.currentDraw = currentDraw
         self.serialNumber = serialNumber
     }
@@ -923,7 +999,8 @@ extension PortManager {
                     serialNumber: device.serialNumber.isEmpty ? nil : device.serialNumber,
                     speed: speed,
                     usbVersion: formatBcdUSB(device.usbVersion),
-                    currentDraw: device.currentDraw
+                    currentDraw: device.currentDraw,
+                    deviceClass: USBDeviceClass(code: device.deviceClass)
                 )
             }
 
@@ -1134,7 +1211,13 @@ extension PortManager {
                 configuredVoltage: charger.voltage,
                 configuredCurrent: charger.maxCurrent,
                 vconnCurrent: 0,
-                direction: .incoming
+                vconnPower: 0,
+                vconnMaxCurrent: 0,
+                direction: .incoming,
+                // A node without a winning contract is the highest-PDO
+                // fallback (see buildNonUSBCPorts' comment): a capability the
+                // charger offers, not the agreement the two of them reached.
+                contractIsEstimated: !charger.hasWinningContract
             )
         }
     }
@@ -1177,7 +1260,13 @@ extension PortManager {
             configuredVoltage: resolved.contract.voltageMV,
             configuredCurrent: resolved.contract.currentMA,
             vconnCurrent: 0,
-            direction: .incoming
+            vconnPower: 0,
+            vconnMaxCurrent: 0,
+            direction: .incoming,
+            // This whole path only ever fires where macOS published no
+            // USB-C power-source node of its own; the contract is always
+            // synthesized from the SMC, never macOS-confirmed.
+            contractIsEstimated: true
         )
     }
 
@@ -1223,7 +1312,10 @@ extension PortManager {
                 configuredVoltage: existing?.configuredVoltage ?? 0,
                 configuredCurrent: existing?.configuredCurrent ?? 0,
                 vconnCurrent: existing?.vconnCurrent ?? 0,
-                direction: .outgoing
+                vconnPower: existing?.vconnPower ?? 0,
+                vconnMaxCurrent: existing?.vconnMaxCurrent ?? 0,
+                direction: .outgoing,
+                contractIsEstimated: existing?.contractIsEstimated ?? false
             )
         }
     }
@@ -1373,7 +1465,12 @@ extension PortManager {
                     configuredVoltage: negotiated?.voltage ?? 0,
                     configuredCurrent: negotiated?.maxCurrent ?? 0,
                     vconnCurrent: 0,
-                    direction: .incoming
+                    vconnPower: 0,
+                    vconnMaxCurrent: 0,
+                    direction: .incoming,
+                    // `negotiated` is filtered to hasWinningContract above, so
+                    // when it is present it is macOS's own answer, not a guess.
+                    contractIsEstimated: false
                 )
             }
 
@@ -1418,7 +1515,11 @@ extension PortManager {
                 configuredVoltage: pwr.configuredVoltage,
                 configuredCurrent: pwr.configuredCurrent,
                 vconnCurrent: pwr.vconnCurrent,
-                direction: .outgoing
+                vconnPower: pwr.vconnPower,
+                vconnMaxCurrent: pwr.vconnMaxCurrent,
+                direction: .outgoing,
+                // Read straight from PowerOutDetails, macOS's own measurement.
+                contractIsEstimated: false
             )
         }
 
@@ -1432,6 +1533,7 @@ extension PortManager {
             power: portPower
         )
         state.dpLinkRate = phy?.dpLinkRate ?? ""
+        state.dpTunnelLinkRate = phy?.dpTunnel ?? ""
         return state
     }
 

@@ -345,6 +345,9 @@ private let incomingPower = PortPower(
     #expect(charging?.power?.configuredVoltage == 20_000)
     #expect(charging?.power?.configuredCurrent == 5_000)
     #expect(charging?.primaryProtocol == .charging)
+    // This whole path only fires where macOS published no node of its own,
+    // so the contract shown is always attributed, never confirmed.
+    #expect(charging?.power?.contractIsEstimated == true)
 
     // The other port is untouched.
     #expect(manager.ports.first { $0.id == 2 }?.power == nil)
@@ -381,6 +384,48 @@ private let incomingPower = PortPower(
     let charging = manager.ports.first { $0.id == 1 }
     #expect(charging?.power?.configuredVoltage == 15_000)
     #expect(charging?.power?.configuredCurrent == 3_000)
+    // macOS published this node with a winning contract, so it is confirmed,
+    // not attributed.
+    #expect(charging?.power?.contractIsEstimated == false)
+}
+
+// A charger node macOS published WITHOUT a winning contract (the highest-PDO
+// fallback ChargerReader falls back to) is a capability, not an agreement.
+// applyChargerPower must still show it -- the wattage is a real measurement --
+// but mark the contract figures as estimated rather than presenting a
+// fallback PDO as something the two of them settled on.
+@Test func portManagerMarksAFallbackChargerContractAsEstimated() {
+    let manager = PortManager()
+
+    manager.applySnapshot(PortManagerSnapshot(
+        hpmPorts: [HPMPortInput(uuid: portUUID, portNumber: 1, portType: "USB-C")],
+        ccData: [
+            CCInput(portNumber: 1, portType: "USB-C", active: true, cableProductType: "", cablePDRevision: 0)
+        ],
+        chargerData: [
+            ChargerInput(
+                portType: "USB-C",
+                portNumber: 1,
+                maxWatts: 60_000,
+                voltage: 15_000,
+                maxCurrent: 3_000,
+                hasWinningContract: false
+            )
+        ],
+        chargingPower: ChargingPowerInput(
+            systemPowerIn: 58_000,
+            systemVoltageIn: 15_000,
+            systemCurrentIn: 3_800,
+            isCharging: true
+        )
+    ))
+
+    let charging = manager.ports.first { $0.id == 1 }
+    // The measured wattage is unaffected by the missing winning contract.
+    #expect(charging?.power?.watts == 58.0)
+    #expect(charging?.power?.configuredVoltage == 15_000)
+    #expect(charging?.power?.configuredCurrent == 3_000)
+    #expect(charging?.power?.contractIsEstimated == true)
 }
 
 // A bare node (macOS published the port but no PDO yet) must not be treated as

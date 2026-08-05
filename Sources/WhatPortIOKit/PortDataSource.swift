@@ -35,6 +35,16 @@ public struct PortSnapshot: Sendable {
     // SMC per-port charging contracts (power IN), joined by the same UUID.
     // Only read while a charger is attached; empty otherwise.
     public let smcPortContracts: [RawSMCPortContract]
+    // Total system DC-in (wall) power from the SMC, read once per snapshot.
+    // combineChargingPower already folds this into chargingPower when a
+    // battery controller is present; this is the same read kept available for
+    // desktops, which have no battery controller and so no chargingPower at
+    // all despite genuinely drawing wall power.
+    public let smcSystemPower: RawSMCSystemPower?
+    // Machine-wide Thunderbolt/XHCI controller power state. Reader-only for
+    // now: see ControllerPowerReader for the corpus evidence and why the
+    // occupancy-confidence logic that will consume this is a separate PR.
+    public let controllerPower: RawControllerPower?
 
     public init(
         timestamp: Date = .now,
@@ -54,7 +64,9 @@ public struct PortSnapshot: Sendable {
         dpTransport: [RawDPTransportState] = [],
         cioTransport: [RawCIOTransportState] = [],
         smcPortPower: [RawSMCPortPower] = [],
-        smcPortContracts: [RawSMCPortContract] = []
+        smcPortContracts: [RawSMCPortContract] = [],
+        smcSystemPower: RawSMCSystemPower? = nil,
+        controllerPower: RawControllerPower? = nil
     ) {
         self.timestamp = timestamp
         self.hpmPorts = hpmPorts
@@ -74,6 +86,8 @@ public struct PortSnapshot: Sendable {
         self.cioTransport = cioTransport
         self.smcPortPower = smcPortPower
         self.smcPortContracts = smcPortContracts
+        self.smcSystemPower = smcSystemPower
+        self.controllerPower = controllerPower
     }
 }
 
@@ -93,13 +107,19 @@ public enum SnapshotReader {
         // power, and the power-metering-available flag.
         let smcPortPower = smc.readPortPowerChannels()
 
+        // One read of the SMC DC-in rails, shared by two consumers: the
+        // laptop charging-power path below (which discards it on desktops,
+        // no battery controller to combine it with) and smcSystemPower on
+        // the snapshot itself, which desktops can still read directly.
+        let smcSystemPower = smc.readSystemPowerInput()
+
         // Charger power-IN: the battery telemetry is the baseline (and gates on a
         // charger being connected), but the SMC DC-in rails are the live source.
         // AppleSmartBattery.SystemPowerIn freezes under load just like
         // PowerOutDetails, so prefer the SMC where it's available.
         let chargingPower = combineChargingPower(
             battery: PowerReader.readChargingPower(),
-            smc: smc.readSystemPowerInput()
+            smc: smcSystemPower
         )
 
         // Per-port metering is available if the battery exposes PowerOutDetails
@@ -146,7 +166,9 @@ public enum SnapshotReader {
             dpTransport: TransportStateReader.readDisplayPort(),
             cioTransport: TransportStateReader.readCIO(),
             smcPortPower: smcPortPower,
-            smcPortContracts: smcPortContracts
+            smcPortContracts: smcPortContracts,
+            smcSystemPower: smcSystemPower,
+            controllerPower: ControllerPowerReader.readAll()
         )
     }
 

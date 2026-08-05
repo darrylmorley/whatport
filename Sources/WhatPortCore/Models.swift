@@ -33,6 +33,10 @@ public struct PortState: Identifiable, Sendable {
     // no DisplayPort connection is active on this port. Fallback; prefer
     // liveTransports when available.
     public var dpLinkRate: String = ""
+    // Raw DP tunnel link rate from PHY, when DisplayPort is tunnelled over
+    // CIO rather than running native alt mode. Same format as dpLinkRate,
+    // empty when no tunnelled DP connection is active.
+    public var dpTunnelLinkRate: String = ""
 
     // Health signals from the HPM port-controller node.
     // Nil on machines without an HPM node or when health data is unavailable.
@@ -309,7 +313,19 @@ public struct PortPower: Sendable, Equatable {
     public var configuredVoltage: Int
     public var configuredCurrent: Int
     public var vconnCurrent: Int
+    // Power and max current sourced over VConn to an active (powered) cable's
+    // e-marker chip. Zero on a passive cable. Disclosed factually in the UI
+    // (the cable is active) with no grading of cable quality; that judgement
+    // is WhatCable's territory, not this app's.
+    public var vconnPower: Int
+    public var vconnMaxCurrent: Int
     public var direction: PowerDirection
+    // True when the contract (voltage/current) shown was attributed rather
+    // than read from a macOS-published node: the SMCContractAttribution
+    // fallback on M1 Pro/Max/Ultra, or a charger node macOS published without
+    // a winning contract. The wattage above is always a real measurement;
+    // only the contract figures are in question when this is true.
+    public var contractIsEstimated: Bool
 
     public init(
         watts: Double,
@@ -318,7 +334,10 @@ public struct PortPower: Sendable, Equatable {
         configuredVoltage: Int,
         configuredCurrent: Int,
         vconnCurrent: Int,
-        direction: PowerDirection = .outgoing
+        vconnPower: Int = 0,
+        vconnMaxCurrent: Int = 0,
+        direction: PowerDirection = .outgoing,
+        contractIsEstimated: Bool = false
     ) {
         self.watts = watts
         self.current = current
@@ -326,7 +345,10 @@ public struct PortPower: Sendable, Equatable {
         self.configuredVoltage = configuredVoltage
         self.configuredCurrent = configuredCurrent
         self.vconnCurrent = vconnCurrent
+        self.vconnPower = vconnPower
+        self.vconnMaxCurrent = vconnMaxCurrent
         self.direction = direction
+        self.contractIsEstimated = contractIsEstimated
     }
 }
 
@@ -420,6 +442,54 @@ public enum USBSpeed: Sendable, Equatable {
     }
 }
 
+// MARK: - USB Device Class
+
+// bDeviceClass, but only the values reliable when read straight off the
+// device descriptor. Class 0x00 means "look at each interface instead",
+// which is a real ambiguity we cannot resolve without walking interface
+// descriptors we do not read, so it and anything unmapped decode to nil
+// rather than a guessed label.
+public enum USBDeviceClass: Sendable, Equatable {
+    case hub
+    case audio
+    case video
+    case massStorage
+    case smartCard
+    case billboard
+    case wireless
+    case miscellaneous
+    case vendorSpecific
+
+    public init?(code: Int) {
+        switch code {
+        case 0x09: self = .hub
+        case 0x01: self = .audio
+        case 0x0E: self = .video
+        case 0x08: self = .massStorage
+        case 0x0B: self = .smartCard
+        case 0x11: self = .billboard
+        case 0xE0: self = .wireless
+        case 0xEF: self = .miscellaneous
+        case 0xFF: self = .vendorSpecific
+        default: return nil
+        }
+    }
+
+    public var label: String {
+        switch self {
+        case .hub: return "Hub"
+        case .audio: return "Audio"
+        case .video: return "Video"
+        case .massStorage: return "Storage"
+        case .smartCard: return "Smart card"
+        case .billboard: return "Billboard"
+        case .wireless: return "Wireless"
+        case .miscellaneous: return "Miscellaneous"
+        case .vendorSpecific: return "Vendor-specific"
+        }
+    }
+}
+
 // MARK: - USB Device Info
 
 public struct USBDeviceInfo: Sendable, Equatable {
@@ -429,6 +499,7 @@ public struct USBDeviceInfo: Sendable, Equatable {
     public var speed: USBSpeed?
     public var usbVersion: String    // "USB 3.2", "USB 2.0", etc.
     public var currentDraw: Int      // mA allocated by host
+    public var deviceClass: USBDeviceClass?
 
     public init(
         productName: String,
@@ -436,7 +507,8 @@ public struct USBDeviceInfo: Sendable, Equatable {
         serialNumber: String? = nil,
         speed: USBSpeed? = nil,
         usbVersion: String = "",
-        currentDraw: Int = 0
+        currentDraw: Int = 0,
+        deviceClass: USBDeviceClass? = nil
     ) {
         self.productName = productName
         self.vendorName = vendorName
@@ -444,6 +516,7 @@ public struct USBDeviceInfo: Sendable, Equatable {
         self.speed = speed
         self.usbVersion = usbVersion
         self.currentDraw = currentDraw
+        self.deviceClass = deviceClass
     }
 }
 

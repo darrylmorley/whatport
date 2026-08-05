@@ -65,6 +65,37 @@ import Testing
     #expect(TBGeneration.tb5.perLaneGbps == 40)
 }
 
+// USBSpeed decodes the IOUSBHostDevice "Device Speed" enum (0=LS...5=SSPlus2x2).
+// There is a SECOND, unrelated USB enum with an almost identical name and
+// overlapping numbering: the BOS descriptor's "USBSpeed" field (1=FS, 2=HS,
+// 3=HS, 4=SS, 5=SSPlus). Feeding that table's numbers through this one would
+// silently mislabel every device 3 and up. This pins code 3 as SuperSpeed
+// (5 Gbps) specifically to catch a future refactor that reads the wrong key.
+@Test func usbSpeedDecodesDeviceSpeedNotBOSSpeed() {
+    #expect(USBSpeed(code: 3) == .superSpeed)
+    #expect(USBSpeed(code: 3).label == "5 Gbps")
+}
+
+@Test func usbDeviceClassDecodesKnownClasses() {
+    #expect(USBDeviceClass(code: 0x09) == .hub)
+    #expect(USBDeviceClass(code: 0x01) == .audio)
+    #expect(USBDeviceClass(code: 0x0E) == .video)
+    #expect(USBDeviceClass(code: 0x08) == .massStorage)
+    #expect(USBDeviceClass(code: 0x0B) == .smartCard)
+    #expect(USBDeviceClass(code: 0x11) == .billboard)
+    #expect(USBDeviceClass(code: 0xE0) == .wireless)
+    #expect(USBDeviceClass(code: 0xEF) == .miscellaneous)
+    #expect(USBDeviceClass(code: 0xFF) == .vendorSpecific)
+}
+
+// 0x00 means "per-interface", not a real device-level class, and anything
+// not in the mapped list must stay unlabelled rather than guess.
+@Test func usbDeviceClassRejectsPerInterfaceAndUnknown() {
+    #expect(USBDeviceClass(code: 0x00) == nil)
+    #expect(USBDeviceClass(code: 0x02) == nil) // CDC, not mapped at device level
+    #expect(USBDeviceClass(code: 0xFE) == nil)
+}
+
 @Test func portStateIsActiveWhenLaneHasTransport() {
     var port = PortState(id: 1)
     #expect(!port.isActive)

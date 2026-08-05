@@ -21,7 +21,7 @@ public struct RawDeviceInfo: Sendable {
     public let vendorName: String
     public let speedCode: Int        // Device Speed enum value
     public let usbVersion: Int       // bcdUSB (e.g. 800 = USB 3.2)
-    public let deviceClass: Int      // bInterfaceClass (8 = storage, etc.)
+    public let deviceClass: Int      // bDeviceClass (8 = storage, etc.)
     public let currentDraw: Int      // UsbPowerSinkAllocation in mA
     public let serialNumber: String  // kUSBSerialNumberString (hex-encoded)
 }
@@ -53,19 +53,38 @@ public enum DeviceReader {
                 ?? ioInt(ioParentProperty(service, key: "UsbCPortNumber")).nonZero
                 ?? 0
 
-            results.append(RawDeviceInfo(
-                portNumber: portNumber,
-                productName: productName,
-                vendorName: ioString(props["USB Vendor Name"]),
-                speedCode: ioInt(props["Device Speed"]),
-                usbVersion: ioInt(props["bcdUSB"]),
-                deviceClass: ioInt(props["bDeviceClass"]),
-                currentDraw: ioInt(props["UsbPowerSinkAllocation"]),
-                serialNumber: ioString(props["kUSBSerialNumberString"])
-            ))
+            if let device = parse(properties: props, portNumber: portNumber) {
+                results.append(device)
+            }
         }
 
         return results
+    }
+
+    // The device-info extraction rules, given one device's properties and the
+    // physical port number the walk resolved from ancestor device-tree nodes.
+    // Split out from the registry walk so recorded/synthetic properties can be
+    // replayed through it directly.
+    //
+    // portNumber comes in rather than being read here because it lives on
+    // ancestor nodes, not on the device itself.
+    static func parse(properties: [String: Any], portNumber: Int) -> RawDeviceInfo? {
+        let productName = ioString(properties["USB Product Name"])
+        guard !productName.isEmpty else { return nil }
+
+        return RawDeviceInfo(
+            portNumber: portNumber,
+            productName: productName,
+            vendorName: ioString(properties["USB Vendor Name"]),
+            // "Device Speed" (IOUSBHostDevice's own enum), not the differently
+            // numbered "USBSpeed" BOS descriptor field. See
+            // DeviceReaderTests.deviceReaderReadsDeviceSpeedNotBOSUSBSpeed.
+            speedCode: ioInt(properties["Device Speed"]),
+            usbVersion: ioInt(properties["bcdUSB"]),
+            deviceClass: ioInt(properties["bDeviceClass"]),
+            currentDraw: ioInt(properties["UsbPowerSinkAllocation"]),
+            serialNumber: ioString(properties["kUSBSerialNumberString"])
+        )
     }
 }
 

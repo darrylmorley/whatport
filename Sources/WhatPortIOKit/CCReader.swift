@@ -1,5 +1,6 @@
 import Foundation
 import IOKit
+import WhatPortCore
 
 // Reads CC (communication channel) connection state from all port types.
 //
@@ -57,6 +58,12 @@ public enum CCReader {
 
     // Walk child services of a CC entry looking for SOP' (cable identity).
     // The SOP' service has Metadata with cable VDOs decoded by the kernel.
+    //
+    // The child iterator can be invalidated mid-walk by the same registry
+    // mutation that connect/disconnect events trigger, which makes
+    // IOIteratorNext return 0 as if the walk had simply finished. Retrying
+    // through IteratorWalkRetry catches that instead of silently missing a
+    // cable that was actually there.
     private static func readCableIdentity(
         ccService: io_service_t
     ) -> (productType: String, pdRevision: Int) {
@@ -65,6 +72,20 @@ public enum CCReader {
         guard kr == KERN_SUCCESS else { return ("", 0) }
         defer { IOObjectRelease(iter) }
 
+        let matches = IteratorWalkRetry.retry(
+            isValid: { IOIteratorIsValid(iter) != 0 },
+            reset: { IOIteratorReset(iter) },
+            walk: { walkChildrenForCableIdentity(iter) }
+        )
+
+        return matches.first ?? ("", 0)
+    }
+
+    // Drain a child iterator looking for the SOP' cable-identity service.
+    // Stops at the first match found (there is at most one).
+    private static func walkChildrenForCableIdentity(
+        _ iter: io_iterator_t
+    ) -> [(productType: String, pdRevision: Int)] {
         while case let child = IOIteratorNext(iter), child != 0 {
             defer { IOObjectRelease(child) }
             guard let childProps = ioProperties(child) else { continue }
@@ -77,10 +98,10 @@ public enum CCReader {
             let pdRevision = ioInt(childProps["Specification Revision"])
 
             if !productType.isEmpty {
-                return (productType, pdRevision)
+                return [(productType, pdRevision)]
             }
         }
 
-        return ("", 0)
+        return []
     }
 }

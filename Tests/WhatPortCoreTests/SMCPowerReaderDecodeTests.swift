@@ -31,3 +31,43 @@ import Testing
     // Int.max itself still decodes.
     #expect(SMCPowerReader.decodeBigEndianInt([0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]) == Int.max)
 }
+
+// System DC-in power (VD0R/ID0R/PDTR). PDTR is the firmware's own total and
+// is preferred outright over volts * amps when present, even when the two
+// disagree -- this pins that PDTR wins, not just that it's read.
+@Test func systemPowerPrefersPDTROverVoltsTimesAmps() {
+    func encodeFloat(_ value: Float) -> [UInt8] {
+        withUnsafeBytes(of: value.bitPattern.littleEndian) { Array($0) }
+    }
+
+    let keys: [String: [UInt8]] = [
+        "VD0R": encodeFloat(20.0),
+        "ID0R": encodeFloat(5.0),
+        "PDTR": encodeFloat(97.5)   // Deliberately not 20 * 5 = 100.
+    ]
+
+    let result = SMCPowerReader.buildSystemPowerInput(readKey: { keys[$0] })
+    #expect(result?.volts == 20.0)
+    #expect(result?.amps == 5.0)
+    #expect(result?.watts == 97.5)
+}
+
+// Without PDTR, watts falls back to volts * amps.
+@Test func systemPowerFallsBackToVoltsTimesAmpsWithoutPDTR() {
+    func encodeFloat(_ value: Float) -> [UInt8] {
+        withUnsafeBytes(of: value.bitPattern.littleEndian) { Array($0) }
+    }
+
+    let keys: [String: [UInt8]] = [
+        "VD0R": encodeFloat(9.0),
+        "ID0R": encodeFloat(2.0)
+    ]
+
+    let result = SMCPowerReader.buildSystemPowerInput(readKey: { keys[$0] })
+    #expect(result?.watts == 18.0)
+}
+
+// Neither rail present -> nil, so the caller falls back to battery telemetry.
+@Test func systemPowerIsNilWithoutEitherRail() {
+    #expect(SMCPowerReader.buildSystemPowerInput(readKey: { _ in nil }) == nil)
+}
