@@ -37,6 +37,12 @@ public final class PortManager: @unchecked Sendable {
     // Power history for sparkline graphs (per port ID)
     public private(set) var powerHistory: [Int: [PowerSample]] = [:]
 
+    // Per-port connection-lifecycle phase, derived from IOAccessoryManager
+    // signals (see PortLifecycleStateMachine). Absence of an entry means
+    // "connected" (or simply idle): there is no tracked phase for it.
+    public private(set) var lifecyclePhases: [Int: PortLifecyclePhase] = [:]
+    private var lifecycleMachine = PortLifecycleStateMachine()
+
     // 60 samples at the 1s poll interval = the 60s window the sparkline labels.
     private let maxPowerSamples = 60
 
@@ -84,6 +90,27 @@ public final class PortManager: @unchecked Sendable {
             smcPortContracts: snapshot.smcPortContracts
         )
 
+        // Lifecycle reconciliation. A port is disconnected once CC drops, or
+        // once it stops appearing in the correlated set entirely (e.g. an HPM
+        // roster change); it is resolved once the port state actually shows
+        // something live, rather than waiting on the lifecycle signals alone.
+        // This runs on every applySnapshot, so it also serves as the machine's
+        // timeout clock -- see PortLifecycleStateMachine.reconcile.
+        let trackedLifecyclePortIDs = Set(lifecycleMachine.phases.keys)
+        let correlatedPortIDs = Set(correlated.map(\.id))
+        var disconnectedPortIDs = Set(correlated.filter { !$0.ccConnected }.map(\.id))
+        disconnectedPortIDs.formUnion(trackedLifecyclePortIDs.subtracting(correlatedPortIDs))
+        let resolvedPortIDs = Set(correlated.filter(\.isLifecycleResolved).map(\.id))
+        lifecycleMachine.reconcile(
+            disconnectedPortIDs: disconnectedPortIDs,
+            resolvedPortIDs: resolvedPortIDs,
+            now: snapshot.timestamp
+        )
+        let reconciledLifecyclePhases = lifecycleMachine.phases
+        if reconciledLifecyclePhases != lifecyclePhases {
+            lifecyclePhases = reconciledLifecyclePhases
+        }
+
         // Flight Recorder: record before updating published state so the
         // recorder can diff old ports vs new correlated ports.
         recorder?.recordSnapshot(ports: correlated, timestamp: snapshot.timestamp)
@@ -101,6 +128,36 @@ public final class PortManager: @unchecked Sendable {
                 }
                 powerHistory[port.id] = history
             }
+        }
+    }
+
+    // Called by the IOKit layer whenever a lifecycle notification decodes to
+    // one of the known signals. Separate from applySnapshot because these
+    // notifications arrive on their own interest-notification path, not the
+    // poll/snapshot path.
+    //
+    // Not internally synchronised (no locking, PortManager is
+    // @unchecked Sendable): callers must invoke this on the same executor as
+    // applySnapshot, since both mutate lifecycleMachine and the published
+    // lifecyclePhases. In the app that's the MainActor, matching every other
+    // PortManager entry point.
+    public func applyLifecycleSignal(_ input: PortLifecycleSignalInput, at timestamp: Date = .now) {
+        // The lifecycle codes repeat after the port has already resolved
+        // (empirically, "negotiating" fires again after "contract
+        // established" and after "transport ready"). reconcile() clears a
+        // resolved port on the next poll, but that leaves a sub-second window
+        // where a late repeat could recreate a phase and flash "Negotiating"
+        // over an already-connected port. Guard it here too.
+        if let existing = ports.first(where: { $0.id == input.portID }), existing.isLifecycleResolved {
+            return
+        }
+
+        lifecycleMachine.handle(input.signal, portID: input.portID, at: timestamp)
+        let updatedPhases = lifecycleMachine.phases
+        // Equality guard: a repeated no-op signal (the common case, since
+        // these codes repeat) must not trigger an Observable write.
+        if updatedPhases != lifecyclePhases {
+            lifecyclePhases = updatedPhases
         }
     }
 

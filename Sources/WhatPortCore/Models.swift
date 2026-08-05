@@ -138,6 +138,17 @@ public struct PortState: Identifiable, Sendable {
     }
 }
 
+// Shared "has this port actually resolved to something live" predicate, used
+// both by PortManager.applySnapshot (to reconcile the lifecycle machine) and
+// applyLifecycleSignal (to suppress a stale repeat signal from regressing an
+// already-connected port). Kept as one definition so the two call sites can't
+// drift apart.
+extension PortState {
+    public var isLifecycleResolved: Bool {
+        primaryProtocol != .idle || deviceName != nil
+    }
+}
+
 // MARK: - Port Health
 
 public enum HealthSeverity: Sendable, Equatable {
