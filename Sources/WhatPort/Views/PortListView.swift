@@ -184,7 +184,8 @@ struct PortListView: View {
                 PortRowView(
                     port: port,
                     isCharging: portManager.isCharging,
-                    fullyCharged: portManager.fullyCharged
+                    fullyCharged: portManager.fullyCharged,
+                    lifecyclePhase: portManager.lifecyclePhases[port.id]
                 )
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -324,7 +325,14 @@ struct PortRowView: View {
     let port: PortState
     var isCharging: Bool = false
     var fullyCharged: Bool = false
+    var lifecyclePhase: PortLifecyclePhase? = nil
     @State private var isHovered = false
+    // Drives the indicator dot's breathing opacity while a lifecycle phase is
+    // active. Toggled once per phase start inside a repeatForever animation
+    // (see protocolIndicator), not polled.
+    @State private var isPulsing = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 10) {
@@ -333,7 +341,7 @@ struct PortRowView: View {
                 HStack(spacing: 5) {
                     Text(titleText)
                         .scaledFont(.body, weight: .semibold)
-                        .foregroundStyle(port.isActive ? .primary : .secondary)
+                        .foregroundStyle(port.isActive || lifecyclePhase != nil ? .primary : .secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                     // Show port number next to device name so you know which port
@@ -347,6 +355,11 @@ struct PortRowView: View {
                     .scaledFont(.subheadline)
                     .foregroundStyle(port.isActive ? .secondary : .tertiary)
                     .lineLimit(1)
+                    // A plain String swap on Text is not animatable on its own; this
+                    // is what makes the row-level .animation(value: lifecyclePhase)
+                    // actually cross-fade Detecting/Negotiating/the real summary
+                    // instead of snapping between them.
+                    .contentTransition(.opacity)
             }
             Spacer(minLength: 4)
             if let power = port.power {
@@ -362,13 +375,16 @@ struct PortRowView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background {
-            if port.isActive || isHovered {
+            // A lifecycle phase counts as emphasised too: attach signals arrive
+            // before the poll flips isActive, so without this the row sits dim
+            // under a pulsing dot instead of reading as a live row.
+            if port.isActive || lifecyclePhase != nil || isHovered {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(rowFill)
             }
         }
         .overlay {
-            if port.isActive || isHovered {
+            if port.isActive || lifecyclePhase != nil || isHovered {
                 RoundedRectangle(cornerRadius: 8)
                     .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
             }
@@ -378,6 +394,41 @@ struct PortRowView: View {
             isHovered = hovering
         }
         .animation(.easeInOut(duration: 0.15), value: isHovered)
+        // Cross-fades the status text/dot when a lifecycle phase starts,
+        // changes, or hands off to the normal connected rendering.
+        .animation(.easeInOut(duration: 0.2), value: lifecyclePhase)
+        .onAppear { updatePulse(for: lifecyclePhase) }
+        .onChange(of: lifecyclePhase) { _, newPhase in
+            updatePulse(for: newPhase)
+        }
+        // Reduce Motion can be toggled mid-phase (System Settings, or the
+        // accessibility shortcut), so the pulse has to react to it directly,
+        // not just at phase start.
+        .onChange(of: reduceMotion) { _, _ in
+            updatePulse(for: lifecyclePhase)
+        }
+    }
+
+    // Starts (or stops) the indicator dot's breathing opacity for the
+    // duration of a lifecycle phase. detecting -> negotiating leaves an
+    // already-running pulse alone (no restart, no stacked animations); only
+    // a genuine start or stop touches isPulsing.
+    private func updatePulse(for phase: PortLifecyclePhase?) {
+        guard phase != nil, !reduceMotion else {
+            // repeatForever's stop/restart idiom is known-unreliable on some
+            // SwiftUI versions when the property is just assigned outside an
+            // animation block. A zero-duration animation deterministically
+            // replaces the repeating animation on this property instead of
+            // relying on transaction coalescing.
+            withAnimation(.linear(duration: 0)) {
+                isPulsing = false
+            }
+            return
+        }
+        guard !isPulsing else { return }
+        withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+            isPulsing = true
+        }
     }
 
     // Neutral gray cards. No protocol color in the fill.
@@ -408,9 +459,18 @@ struct PortRowView: View {
         Circle()
             .fill(indicatorColor)
             .frame(width: 12, height: 12)
+            // Gated on !reduceMotion too so the dot snaps to fully opaque the
+            // instant Reduce Motion is enabled, rather than waiting on
+            // isPulsing's last animated value to settle.
+            .opacity(lifecyclePhase != nil && !reduceMotion && isPulsing ? 0.4 : 1.0)
     }
 
+    // A phase in progress overrides the committed protocol colour with a
+    // neutral "working" tint, distinct from every committed state below.
     private var indicatorColor: Color {
+        if lifecyclePhase != nil {
+            return .cyan
+        }
         switch port.primaryProtocol {
         case .thunderbolt: return .blue
         case .displayPort: return .orange
@@ -423,6 +483,13 @@ struct PortRowView: View {
     // Protocol and speed only. Device name is in the title now,
     // so this line stays short enough to fit without truncation.
     private var summaryText: String {
+        if let phase = lifecyclePhase {
+            switch phase {
+            case .detecting: return "Detecting\u{2026}"
+            case .negotiating: return "Negotiating\u{2026}"
+            }
+        }
+
         guard port.isActive else { return "Idle" }
 
         if let tb = port.thunderboltLink, port.hasLiveThunderboltLink {
