@@ -63,7 +63,14 @@ public struct PortState: Identifiable, Sendable {
     }
 
     public var primaryProtocol: PortProtocol {
-        if thunderboltLink != nil { return .thunderbolt }
+        // macOS can leave IOThunderboltPort's Current Link Speed/Width
+        // populated long after the device is unplugged (observed on real
+        // hardware: a trained link surviving 20 days of idle uptime). A
+        // genuine Thunderbolt connection always lights the PHY lanes as CIO
+        // transport, so isActive is true; requiring it here means a stale,
+        // uncorroborated registry value falls through to the branches below
+        // instead of painting the port blue.
+        if thunderboltLink != nil && isActive { return .thunderbolt }
         if lane0.transport == .displayPort || lane1.transport == .displayPort {
             return .displayPort
         }

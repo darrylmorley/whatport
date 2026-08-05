@@ -790,8 +790,11 @@ struct PortDetailView: View {
                 LabeledValue(label: "Connected", value: name)
             }
 
-            // Current negotiated link
-            if let link {
+            // Current negotiated link. macOS can leave a stale link trained
+            // in the registry long after the device is unplugged (same cause
+            // as PortState.primaryProtocol), so only trust it when the port
+            // is actually active; otherwise show it as no active link.
+            if let link, port.isActive {
                 let lanes = formatLanes(tx: link.txLanes, rx: link.rxLanes)
                 LabeledValue(
                     label: "Current link",

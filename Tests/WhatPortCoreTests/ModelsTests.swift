@@ -152,3 +152,32 @@ import Testing
     )
     #expect(dp.primaryProtocol == .displayPort)
 }
+
+// Regression: macOS can leave IOThunderboltPort's Current Link Speed/Width
+// populated long after a device is unplugged. Without lane or CC
+// corroboration, a stale thunderboltLink must not paint the port blue.
+@Test func portStatePrimaryProtocolIgnoresStaleThunderboltLink() {
+    let stale = PortState(
+        id: 1,
+        lane0: .idle,
+        lane1: .idle,
+        usb2Active: false,
+        ccConnected: false,
+        thunderboltLink: ThunderboltLinkState(generation: .tb3, perLaneGbps: 10, txLanes: 2, rxLanes: 2)
+    )
+    #expect(stale.primaryProtocol == .idle)
+}
+
+// A genuine Thunderbolt connection always lights the PHY lanes as CIO
+// transport, so a real link still reports .thunderbolt.
+@Test func portStatePrimaryProtocolTrustsCorroboratedThunderboltLink() {
+    let real = PortState(
+        id: 1,
+        lane0: LaneState(transport: .thunderbolt, powerLevel: .on, client: nil),
+        lane1: .idle,
+        usb2Active: false,
+        ccConnected: false,
+        thunderboltLink: ThunderboltLinkState(generation: .tb3, perLaneGbps: 10, txLanes: 2, rxLanes: 2)
+    )
+    #expect(real.primaryProtocol == .thunderbolt)
+}

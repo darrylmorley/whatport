@@ -147,6 +147,12 @@ struct PortListView: View {
         }
     }
 
+    // On an unplugged laptop the SMC DC-in rail (VD0R/ID0R/PDTR) does not
+    // read exactly zero, it reads a few milliwatts. Desktop Macs (the only
+    // intended audience for this line) idle far above that, so a 1 W floor
+    // filters the ghost reading without hiding real wall power.
+    private static let minimumWallPowerWatts = 1.0
+
     // Desktop Macs (Mac mini / Studio / Pro) have no battery controller, so
     // chargingStatus is always nil and headerPowerLabel's "X W in" never
     // fires for them even while genuinely drawing wall power. Gated on
@@ -154,7 +160,7 @@ struct PortListView: View {
     // headerPowerLabel, never displays it twice.
     private var systemWallPowerLabel: String {
         guard portManager.chargingStatus == nil,
-              let watts = portManager.systemWallPowerWatts, watts > 0
+              let watts = portManager.systemWallPowerWatts, watts >= Self.minimumWallPowerWatts
         else { return "" }
         return WattsFormat.string(watts) + " from wall"
     }
