@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let portManager = PortManager()
     private let dataSource = LivePortDataSource()
     private var dataTask: Task<Void, Never>?
+    private var lifecycleTask: Task<Void, Never>?
     private var isSupported = true
     private var cancellables = Set<AnyCancellable>()
     private var statusItemMoveObserver: NSObjectProtocol?
@@ -127,6 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         dataTask?.cancel()
+        lifecycleTask?.cancel()
         dataSource.stop()
 
         // Run plugin teardown hooks
@@ -262,6 +264,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private func startDataPipeline() {
         let stream = dataSource.observePortUpdates()
+        let lifecycleStream = dataSource.observeLifecycleEvents()
 
         dataTask = Task {
             await dataSource.start()
@@ -270,6 +273,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 let managerSnapshot = SnapshotAdapter.convert(snapshot)
                 portManager.applySnapshot(managerSnapshot)
                 updateBadge()
+            }
+        }
+
+        // Lifecycle events are a second, separate stream (see
+        // observeLifecycleEvents' doc comment): near-instant attach /
+        // negotiating / contractEstablished / transportReady signals, fed
+        // straight into the state machine PortManager already owns. start()
+        // is idempotent (guarded internally), so calling it again here is
+        // safe regardless of which of the two tasks runs first.
+        lifecycleTask = Task {
+            await dataSource.start()
+
+            for await event in lifecycleStream {
+                portManager.applyLifecycleSignal(SnapshotAdapter.convert(event))
             }
         }
     }

@@ -192,4 +192,27 @@ enum SnapshotAdapter {
             }
         )
     }
+
+    // Converts IOKit's raw lifecycle event into the domain layer's lifecycle
+    // signal input. MagSafe ports use id = 100 + portNumber, the same
+    // convention PortManager applies when building non-USB-C ports from CC
+    // data (see buildNonUSBCPorts). PortManager keeps that offset as a plain
+    // literal rather than a shared constant, so this mirrors it the same way.
+    static func convert(_ event: RawPortLifecycleEvent) -> PortLifecycleSignalInput {
+        let portID = event.isMagSafe ? 100 + event.portNumber : event.portNumber
+
+        let signal: LifecycleSignalKind
+        switch event.signal {
+        case .attach:
+            signal = .attach
+        case .negotiating:
+            signal = .negotiating
+        case .contractEstablished:
+            signal = .contractEstablished
+        case .transportReady:
+            signal = .transportReady
+        }
+
+        return PortLifecycleSignalInput(portID: portID, signal: signal)
+    }
 }
