@@ -139,6 +139,14 @@ import Testing
     #expect(SMCPowerReader.fourCC("TOOLONG") == nil)
 }
 
+// Matches the existing low bar for IOKit-touching code in this file: just
+// confirm construction and stream creation don't crash. No hardware-dependent
+// assertions, since a lifecycle event only ever arrives on an actual plug.
+@Test func livePortDataSourceObserveLifecycleEventsReturnsWithoutCrashing() {
+    let dataSource = LivePortDataSource()
+    _ = dataSource.observeLifecycleEvents()
+}
+
 @Test func smcReaderReadsPortChannelsWithUUIDs() {
     let channels = SMCPowerReader().readPortPowerChannels()
     // Apple Silicon exposes D1..D4 power channels with a DxUI per channel.

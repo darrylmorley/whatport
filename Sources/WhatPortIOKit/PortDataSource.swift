@@ -6,6 +6,10 @@ import WhatPortCore
 
 public protocol PortDataSource: Sendable {
     func observePortUpdates() -> AsyncStream<PortSnapshot>
+    // Decoded IOAccessoryManager lifecycle events (attach, negotiating,
+    // contract established, transport ready), delivered as they happen
+    // rather than folded into a snapshot. See RawPortLifecycleEvent.
+    func observeLifecycleEvents() -> AsyncStream<RawPortLifecycleEvent>
     func start() async
     func stop()
 }
