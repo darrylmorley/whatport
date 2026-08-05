@@ -526,7 +526,10 @@ struct PortRowView: View {
                 if isCharging { return "Charging" }
                 return "Charger connected"
             }
-            return "Connected"
+            // CC tripped but no device, protocol, or power: a bare cable is in
+            // the port (e.g. the far end was unplugged first). Saying so stops
+            // this reading as a stale device connection.
+            return "Cable connected"
         }
 
         return "Active"
