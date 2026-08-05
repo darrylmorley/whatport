@@ -62,15 +62,26 @@ public struct PortState: Identifiable, Sendable {
         lane0.transport != .idle || lane1.transport != .idle || usb2Active || ccConnected
     }
 
+    // macOS can leave IOThunderboltPort's Current Link Speed/Width populated
+    // long after the device is unplugged (observed on real hardware: a
+    // trained link surviving 20 days of idle uptime). isActive alone is not
+    // enough corroboration: CC merely proves something is physically
+    // connected, and a plain USB-C PD charger trips CC too, resurfacing the
+    // stale link. Either a PHY lane trained as Thunderbolt or an active CIO
+    // transport (IOPortTransportStateCIO, surfaced here as a .thunderbolt
+    // LiveTransport) proves the link is real: both are torn down with the
+    // connection, unlike IOThunderboltPort's lingering values. PHY, TB and
+    // CIO are read non-atomically, so a genuine link can briefly show CIO
+    // active before the lane catches up (or vice versa); accepting either
+    // signal avoids a one-poll misclassification during that window.
+    public var hasLiveThunderboltLink: Bool {
+        guard thunderboltLink != nil else { return false }
+        if lane0.transport == .thunderbolt || lane1.transport == .thunderbolt { return true }
+        return liveTransports.contains { $0.kind == .thunderbolt }
+    }
+
     public var primaryProtocol: PortProtocol {
-        // macOS can leave IOThunderboltPort's Current Link Speed/Width
-        // populated long after the device is unplugged (observed on real
-        // hardware: a trained link surviving 20 days of idle uptime). A
-        // genuine Thunderbolt connection always lights the PHY lanes as CIO
-        // transport, so isActive is true; requiring it here means a stale,
-        // uncorroborated registry value falls through to the branches below
-        // instead of painting the port blue.
-        if thunderboltLink != nil && isActive { return .thunderbolt }
+        if hasLiveThunderboltLink { return .thunderbolt }
         if lane0.transport == .displayPort || lane1.transport == .displayPort {
             return .displayPort
         }

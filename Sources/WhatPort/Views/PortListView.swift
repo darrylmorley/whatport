@@ -425,7 +425,7 @@ struct PortRowView: View {
     private var summaryText: String {
         guard port.isActive else { return "Idle" }
 
-        if let tb = port.thunderboltLink {
+        if let tb = port.thunderboltLink, port.hasLiveThunderboltLink {
             let lanes = formatLanes(tx: tb.txLanes, rx: tb.rxLanes)
             return "\(tb.generation.label) \(lanes), \(tb.totalGbps) Gbps"
         }

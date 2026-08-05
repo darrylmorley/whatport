@@ -786,15 +786,17 @@ struct PortDetailView: View {
             sectionHeader("Thunderbolt")
 
             // Name the connected device when its TB controller reports one.
-            if let link, let name = tbDeviceLabel(link) {
+            // Same corroboration as the link row below: a stale registry
+            // value can carry a device name for a device that left long ago.
+            if let link, port.hasLiveThunderboltLink, let name = tbDeviceLabel(link) {
                 LabeledValue(label: "Connected", value: name)
             }
 
             // Current negotiated link. macOS can leave a stale link trained
             // in the registry long after the device is unplugged (same cause
-            // as PortState.primaryProtocol), so only trust it when the port
-            // is actually active; otherwise show it as no active link.
-            if let link, port.isActive {
+            // as PortState.primaryProtocol), so only trust it when a lane is
+            // actually trained as Thunderbolt; otherwise show no active link.
+            if let link, port.hasLiveThunderboltLink {
                 let lanes = formatLanes(tx: link.txLanes, rx: link.rxLanes)
                 LabeledValue(
                     label: "Current link",

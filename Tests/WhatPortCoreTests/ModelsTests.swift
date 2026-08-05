@@ -168,6 +168,25 @@ import Testing
     #expect(stale.primaryProtocol == .idle)
 }
 
+// Regression: a plain USB-C PD charger trips the CC line (isActive becomes
+// true) without training either lane as Thunderbolt. isActive alone is not
+// enough corroboration, only a lane transport of .thunderbolt is. With a
+// negotiated power contract present, this must report .charging, not
+// .thunderbolt.
+@Test func portStatePrimaryProtocolChargerDoesNotCorroborateStaleThunderboltLink() {
+    let chargerPlugged = PortState(
+        id: 1,
+        lane0: .idle,
+        lane1: .idle,
+        usb2Active: false,
+        ccConnected: true,
+        thunderboltLink: ThunderboltLinkState(generation: .tb3, perLaneGbps: 10, txLanes: 2, rxLanes: 2),
+        power: PortPower(watts: 20.0, current: 3000, voltage: 9000, configuredVoltage: 9000, configuredCurrent: 3000, vconnCurrent: 0)
+    )
+    #expect(chargerPlugged.hasLiveThunderboltLink == false)
+    #expect(chargerPlugged.primaryProtocol == .charging)
+}
+
 // A genuine Thunderbolt connection always lights the PHY lanes as CIO
 // transport, so a real link still reports .thunderbolt.
 @Test func portStatePrimaryProtocolTrustsCorroboratedThunderboltLink() {
@@ -180,4 +199,23 @@ import Testing
         thunderboltLink: ThunderboltLinkState(generation: .tb3, perLaneGbps: 10, txLanes: 2, rxLanes: 2)
     )
     #expect(real.primaryProtocol == .thunderbolt)
+}
+
+// Regression: PHY, TB and CIO are read non-atomically, so a genuine link
+// can briefly show an active CIO transport before the lane catches up (or
+// vice versa). An active CIO LiveTransport is just as real a corroboration
+// as a trained lane, and is torn down with the connection like the lane is,
+// unlike IOThunderboltPort's lingering link values.
+@Test func portStatePrimaryProtocolTrustsActiveCIOTransportWithIdleLanes() {
+    var port = PortState(
+        id: 1,
+        lane0: .idle,
+        lane1: .idle,
+        usb2Active: false,
+        ccConnected: false,
+        thunderboltLink: ThunderboltLinkState(generation: .tb4, perLaneGbps: 20, txLanes: 2, rxLanes: 2)
+    )
+    port.liveTransports = [LiveTransport(kind: .thunderbolt, dataRate: "40 Gbps")]
+    #expect(port.hasLiveThunderboltLink == true)
+    #expect(port.primaryProtocol == .thunderbolt)
 }
