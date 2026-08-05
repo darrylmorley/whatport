@@ -18,6 +18,7 @@ Free and open source. Apple Silicon only (M1 and later).
 
 - **Port overview** at a glance from the menu bar, with active count and power in/out
 - **Protocol detection** for Thunderbolt 3/4/5, DisplayPort alt-mode, USB3, and USB2
+- **Connection lifecycle** shown live: Detecting the instant a plug lands, Negotiating while the link trains, then the real details fade in
 - **Live lane status** showing exactly which lanes are carrying data and at what speed
 - **Connections** showing what the port has actually set up, and flagging anything macOS has blocked (the usual reason a dock's USB or display won't work)
 - **Display detail** with link rate (HBR2/HBR3), lanes in use, native versus Thunderbolt-tunnelled, connected display count, and any hub or HDMI converter in the chain
