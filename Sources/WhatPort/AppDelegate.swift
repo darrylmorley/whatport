@@ -188,10 +188,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         if statusItem == nil {
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
             if let button = item.button {
-                if let iconURL = Bundle.whatPortResources.url(forResource: "MenuBarIcon", withExtension: "png") {
-                    let image = NSImage(contentsOf: iconURL)
-                    image?.isTemplate = true  // lets macOS handle light/dark mode
-                    image?.size = NSSize(width: 18, height: 18)
+                // image(forResource:) pairs MenuBarIcon.png with its @2x rep;
+                // loading the 1x file by URL shipped blurry on Retina.
+                if let image = Bundle.whatPortResources.image(forResource: "MenuBarIcon") {
+                    image.isTemplate = true  // lets macOS handle light/dark mode
+                    image.size = NSSize(width: 18, height: 18)
                     button.image = image
                 }
                 button.imagePosition = .imageLeading

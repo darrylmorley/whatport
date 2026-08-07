@@ -589,6 +589,22 @@
         line-height: 1.6;
       }
 
+      /* Sibling apps */
+      .family { border-top: 1px solid var(--line); }
+      .family-apps { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .family-app {
+        display: flex; gap: 16px; align-items: flex-start;
+        padding: 20px 22px; border: 1px solid var(--line);
+        border-radius: 12px; text-decoration: none; color: inherit;
+        background: var(--panel);
+        transition: border-color .15s ease, transform .15s ease;
+      }
+      .family-app:hover { border-color: var(--accent); transform: translateY(-2px); }
+      .family-app .family-icon { width: 48px; height: 48px; flex-shrink: 0; margin-top: 2px; }
+      .family-app h3 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+      .family-app p { color: var(--ink-soft); font-size: 14px; line-height: 1.5; margin-bottom: 6px; }
+      .family-app .family-go { color: var(--accent); font-weight: 600; font-size: 14px; }
+
       /* Install */
       .install { background: #0c1219; color: #fff; }
       .install .section-tag { color: #60a5fa; }
@@ -682,6 +698,7 @@
         .protocol-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .how-grid { grid-template-columns: 1fr; }
         .install-grid { grid-template-columns: 1fr; gap: 32px; }
+        .family-apps { grid-template-columns: 1fr; }
         .screenshot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
         .problem-grid { grid-template-columns: 1fr; }
       }
@@ -1313,6 +1330,34 @@
             <h3>Why does it say my Mac isn't charging?</h3>
             <p>When a charger is connected but the battery isn't filling, WhatPort tells you why: it's charging, already full, or being held below full to protect battery health (Optimized Battery Charging or an 80% limit). It only reports a reason it can confirm, never a guess.</p>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="family" aria-label="Other Bitmoor apps">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="section-tag">Same developer</span>
+          <h2>WhatPort watches the ports. Two more apps cover the rest.</h2>
+          <p>Small Mac utilities built the same way: read what the Mac already knows, then say it in plain English.</p>
+        </div>
+        <div class="family-apps">
+          <a class="family-app" href="https://www.whatcable.uk" rel="noopener">
+            <img class="family-icon" src="/whatcable-icon.png" alt="" width="48" height="48" loading="lazy">
+            <div>
+              <h3>WhatCable</h3>
+              <p>What can this USB-C cable actually do? Speed, wattage, and what is limiting the connection, in plain English.</p>
+              <span class="family-go">Visit whatcable.uk →</span>
+            </div>
+          </a>
+          <a class="family-app" href="https://www.whatbattery.app" rel="noopener">
+            <img class="family-icon" src="/whatbattery-icon.png" alt="" width="48" height="48" loading="lazy">
+            <div>
+              <h3>WhatBattery</h3>
+              <p>Unrounded battery health, live charge and discharge in watts, per-cell readings, and where the charge went overnight.</p>
+              <span class="family-go">Visit whatbattery.app →</span>
+            </div>
+          </a>
         </div>
       </div>
     </section>
