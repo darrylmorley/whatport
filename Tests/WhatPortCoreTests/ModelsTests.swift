@@ -219,3 +219,43 @@ import Testing
     #expect(port.hasLiveThunderboltLink == true)
     #expect(port.primaryProtocol == .thunderbolt)
 }
+
+// MARK: - eventIdentityName
+
+@Test func eventIdentityNamePrefersDeviceNameWhenADisplayIsPresent() {
+    var port = PortState(id: 1, ccConnected: true, deviceName: "27-inch Display")
+    port.displayWidth = 3840
+    port.displayHeight = 2160
+    // A device tree can still be present behind a DP/TB port (e.g. a hub
+    // sharing the same cable); the display keeps priority either way.
+    port.usbDevices = [
+        USBDeviceInfo(productName: "Hub", vendorName: "", deviceClass: .hub)
+    ]
+    #expect(port.eventIdentityName == "27-inch Display")
+}
+
+// The tree root stays put across polls even as usbDevice (the free tier's
+// front-facing pick) flips from the hub to the real device behind it once
+// the child enumerates.
+@Test func eventIdentityNameUsesTheRootDeviceAndStaysStableAsTheTreeGrows() {
+    var hubOnly = PortState(id: 1, ccConnected: true)
+    hubOnly.usbDevices = [
+        USBDeviceInfo(productName: "Dock Hub", vendorName: "", deviceClass: .hub)
+    ]
+    #expect(hubOnly.usbDevice?.productName == "Dock Hub")
+    #expect(hubOnly.eventIdentityName == "Dock Hub")
+
+    var hubAndChild = hubOnly
+    hubAndChild.usbDevices.append(
+        USBDeviceInfo(productName: "Drive", vendorName: "", deviceClass: .massStorage)
+    )
+    // usbDevice flips to the child now it has enumerated...
+    #expect(hubAndChild.usbDevice?.productName == "Drive")
+    // ...but eventIdentityName is unmoved: it is still the root.
+    #expect(hubAndChild.eventIdentityName == "Dock Hub")
+}
+
+@Test func eventIdentityNameIsNilForAnEmptyPort() {
+    let port = PortState(id: 1)
+    #expect(port.eventIdentityName == nil)
+}

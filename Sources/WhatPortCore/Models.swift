@@ -25,7 +25,10 @@ public struct PortState: Identifiable, Sendable {
     public var charger: ChargerInfo?
     public var deviceName: String?
     public var usbSpeed: USBSpeed?
-    public var usbDevice: USBDeviceInfo?
+    // Full device tree behind this port, pre-order (parents before
+    // children, siblings in enumeration order). Empty when nothing is
+    // attached or the port carries no USB data.
+    public var usbDevices: [USBDeviceInfo] = []
     public var cable: CableInfo?
     public var portStats: PortStatistics?
     public var thunderboltCapability: ThunderboltCapability?
@@ -115,7 +118,6 @@ public struct PortState: Identifiable, Sendable {
         power: PortPower? = nil,
         deviceName: String? = nil,
         usbSpeed: USBSpeed? = nil,
-        usbDevice: USBDeviceInfo? = nil,
         cable: CableInfo? = nil,
         portStats: PortStatistics? = nil,
         thunderboltCapability: ThunderboltCapability? = nil
@@ -131,10 +133,53 @@ public struct PortState: Identifiable, Sendable {
         self.power = power
         self.deviceName = deviceName
         self.usbSpeed = usbSpeed
-        self.usbDevice = usbDevice
         self.cable = cable
         self.portStats = portStats
         self.thunderboltCapability = thunderboltCapability
+    }
+
+    // The device the free tier fronts. Hubs enumerate before anything behind
+    // them, so "first" is nearly always the hub on a multi-port hub or dock;
+    // prefer the first real device in tree order and fall back to a hub only
+    // when hubs are all the port has.
+    public var usbDevice: USBDeviceInfo? {
+        usbDevices.first { $0.deviceClass != .hub } ?? usbDevices.first
+    }
+
+    // Stable identity for the event pipeline. usbDevice (above) is what the UI
+    // fronts and can flip from hub to child as a tree enumerates over
+    // successive polls; connect/disconnect matching must not key off that. The
+    // tree's root enumerates first and stays put for the life of the
+    // connection, so it is used here instead. displayWidth/displayHeight are
+    // only ever populated alongside a display name, so their presence marks
+    // the display branch and keeps its priority, matching deviceName's own
+    // precedence. Falls back to deviceName when there is no tree to draw a
+    // root from, so callers that only set deviceName still get a usable
+    // identity. Nil when the port has no name at all.
+    //
+    // Known residual: with two independent roots on one port (a registry
+    // anomaly), usbDevices.first is only as stable as IOKit's iteration
+    // order, so the identity could still flip there. Accepted as rare on
+    // top of rare; the coalescer's nil-leniency does not cover it.
+    public var eventIdentityName: String? {
+        if displayWidth != 0 || displayHeight != 0 { return deviceName }
+        if let root = usbDevices.first { return root.productName }
+        return deviceName
+    }
+
+    // "+N more" for the free tier: real devices beyond the fronted one.
+    // Hubs are plumbing, not something the user plugged in, so they are
+    // not counted.
+    public var additionalDeviceCount: Int {
+        guard usbDevice != nil else { return 0 }
+        let realDevices = usbDevices.filter { $0.deviceClass != .hub }
+        guard realDevices.count > 0 else { return 0 }
+        // Once realDevices is non-empty, usbDevice is guaranteed non-hub: it
+        // only resolves to a hub when every device on the port is a hub, and
+        // that would make realDevices empty (guarded above). So usbDevice is
+        // always one of realDevices here, and the count beyond it is simply
+        // realDevices.count - 1.
+        return max(0, realDevices.count - 1)
     }
 }
 
@@ -529,6 +574,10 @@ public struct USBDeviceInfo: Sendable, Equatable {
     public var usbVersion: String    // "USB 3.2", "USB 2.0", etc.
     public var currentDraw: Int      // mA allocated by host
     public var deviceClass: USBDeviceClass?
+    // Depth in the port's device tree (0 = directly attached).
+    public var hubDepth: Int = 0
+    // Product name of the enclosing hub or dock, nil at depth 0.
+    public var viaName: String? = nil
 
     public init(
         productName: String,
@@ -537,7 +586,9 @@ public struct USBDeviceInfo: Sendable, Equatable {
         speed: USBSpeed? = nil,
         usbVersion: String = "",
         currentDraw: Int = 0,
-        deviceClass: USBDeviceClass? = nil
+        deviceClass: USBDeviceClass? = nil,
+        hubDepth: Int = 0,
+        viaName: String? = nil
     ) {
         self.productName = productName
         self.vendorName = vendorName
@@ -546,6 +597,8 @@ public struct USBDeviceInfo: Sendable, Equatable {
         self.usbVersion = usbVersion
         self.currentDraw = currentDraw
         self.deviceClass = deviceClass
+        self.hubDepth = hubDepth
+        self.viaName = viaName
     }
 }
 

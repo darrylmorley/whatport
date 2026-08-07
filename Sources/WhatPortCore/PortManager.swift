@@ -1006,11 +1006,10 @@ extension PortManager {
         // after every power path so it only tags a confirmed incoming port.
         applyChargerIdentity(to: &results, chargerIdentity: chargerIdentity)
 
-        // Build lookup dictionaries for enrichment data
-        let devicesByPort = Dictionary(
-            deviceData.map { ($0.portNumber, $0) },
-            uniquingKeysWith: { a, _ in a }
-        )
+        // Build lookup dictionaries for enrichment data. Devices are grouped
+        // (not first-wins) because a port can carry a whole tree behind a
+        // hub or dock, not just one device.
+        let deviceDataByPort = Dictionary(grouping: deviceData, by: \.portNumber)
         let displaysByPort = Dictionary(
             displayData.map { ($0.portNumber, $0) },
             uniquingKeysWith: { a, _ in a }
@@ -1037,31 +1036,30 @@ extension PortManager {
         for i in results.indices {
             let portID = results[i].id
 
+            // Full USB device tree for the detail view, pre-order (parents
+            // before children, siblings in enumeration order). Built from
+            // this port's own slice only, so a locationID collision on
+            // another port can never cross-contaminate this tree.
+            let usbDevices = buildDeviceTree(deviceDataByPort[portID] ?? [])
+            results[i].usbDevices = usbDevices
+
+            // Same primary-selection rule as PortState.usbDevice: the first
+            // real (non-hub) device in tree order, falling back to a hub
+            // only when hubs are all the port has. Keeps the row title in
+            // step with whatever the free tier fronts.
+            let primaryDevice = usbDevices.first { $0.deviceClass != .hub } ?? usbDevices.first
+
             // Display name takes priority over USB device name since a USB
             // device on a TB/DP port is usually the hub, not the display.
             if let display = displaysByPort[portID] {
                 results[i].deviceName = display.productName
                 results[i].displayWidth = display.maxWidth
                 results[i].displayHeight = display.maxHeight
-            } else if let device = devicesByPort[portID] {
-                results[i].deviceName = device.productName
-                if device.speedCode > 0 {
-                    results[i].usbSpeed = USBSpeed(code: device.speedCode)
+            } else if let primary = primaryDevice {
+                results[i].deviceName = primary.productName
+                if let speed = primary.speed {
+                    results[i].usbSpeed = speed
                 }
-            }
-
-            // Full USB device info for the detail view
-            if let device = devicesByPort[portID] {
-                let speed = device.speedCode > 0 ? USBSpeed(code: device.speedCode) : nil
-                results[i].usbDevice = USBDeviceInfo(
-                    productName: device.productName,
-                    vendorName: device.vendorName,
-                    serialNumber: device.serialNumber.isEmpty ? nil : device.serialNumber,
-                    speed: speed,
-                    usbVersion: formatBcdUSB(device.usbVersion),
-                    currentDraw: device.currentDraw,
-                    deviceClass: USBDeviceClass(code: device.deviceClass)
-                )
             }
 
             // Cable identity from CC SOP' data
@@ -1611,6 +1609,62 @@ extension PortManager {
         case 0x8: return (1, 3)  // asymmetric RX
         default: return (1, 1)
         }
+    }
+
+    // Assembles a port's flat device list into a tree, pre-order (a device
+    // is emitted before its children, and siblings keep enumeration order).
+    // `devices` must already be scoped to a single port: this never
+    // consults deviceData for any other port, so a locationID collision
+    // across ports cannot make one port's tree pick up another's devices.
+    private func buildDeviceTree(_ devices: [DeviceInput]) -> [USBDeviceInfo] {
+        guard !devices.isEmpty else { return [] }
+
+        let indexed = Array(devices.enumerated())
+        let locationIDs = Set(devices.map(\.locationID))
+
+        func isRoot(_ device: DeviceInput) -> Bool {
+            guard let parentID = DeviceTree.parentLocationID(device.locationID) else { return true }
+            return !locationIDs.contains(parentID)
+        }
+
+        func children(ofLocationID parentLocationID: Int) -> [(offset: Int, element: DeviceInput)] {
+            indexed.filter { DeviceTree.parentLocationID($0.element.locationID) == parentLocationID }
+        }
+
+        func makeInfo(_ device: DeviceInput) -> USBDeviceInfo {
+            let speed = device.speedCode > 0 ? USBSpeed(code: device.speedCode) : nil
+            return USBDeviceInfo(
+                productName: device.productName,
+                vendorName: device.vendorName,
+                serialNumber: device.serialNumber.isEmpty ? nil : device.serialNumber,
+                speed: speed,
+                usbVersion: formatBcdUSB(device.usbVersion),
+                currentDraw: device.currentDraw,
+                deviceClass: USBDeviceClass(code: device.deviceClass),
+                hubDepth: DeviceTree.hubDepth(of: device, in: devices),
+                viaName: DeviceTree.viaName(of: device, in: devices)
+            )
+        }
+
+        // Tracks emitted array offsets, not locationIDs: duplicate
+        // locationIDs within a slice must still each emit exactly once.
+        var emitted = Set<Int>()
+        var result: [USBDeviceInfo] = []
+
+        func visit(_ offset: Int, _ device: DeviceInput) {
+            guard !emitted.contains(offset) else { return }
+            emitted.insert(offset)
+            result.append(makeInfo(device))
+            for (childOffset, childDevice) in children(ofLocationID: device.locationID) {
+                visit(childOffset, childDevice)
+            }
+        }
+
+        for (offset, device) in indexed where isRoot(device) {
+            visit(offset, device)
+        }
+
+        return result
     }
 
     // bcdUSB is BCD-encoded: 0x0200 = 512 = USB 2.0, 0x0300 = 768 = USB 3.0,

@@ -655,6 +655,8 @@ import Testing
 
     manager.applySnapshot(snapshot)
     #expect(manager.ports.first { $0.id == 1 }?.usbDevice?.deviceClass == .hub)
+    // Single-device port regression: one device in, one device out.
+    #expect(manager.ports.first { $0.id == 1 }?.usbDevices.count == 1)
 
     let unmappedSnapshot = PortManagerSnapshot(
         phyData: [PhyInput(phyID: 0, portNumber: 1)],
@@ -664,6 +666,194 @@ import Testing
 
     manager.applySnapshot(unmappedSnapshot)
     #expect(manager.ports.first { $0.id == 1 }?.usbDevice?.deviceClass == nil)
+    #expect(manager.ports.first { $0.id == 1 }?.usbDevices.count == 1)
+}
+
+// Corpus fixture (m4max_macos26.5.1_f, also used in DeviceTreeTests): two
+// nested "USB2.0 Hub" devices with a PreSonus "ATOM" behind the inner one.
+// The whole chain must come back as one pre-order tree, and the free tier
+// must front ATOM (the real device), not either hub.
+@Test func portManagerBuildsMultiDeviceTreeInPreOrder() {
+    let manager = PortManager()
+
+    let outerHub = DeviceInput(portNumber: 1, productName: "USB2.0 Hub", deviceClass: 0x09, locationID: 0x3100000)
+    let innerHub = DeviceInput(portNumber: 1, productName: "USB2.0 Hub", deviceClass: 0x09, locationID: 0x3140000)
+    let atom = DeviceInput(portNumber: 1, productName: "ATOM", locationID: 0x3141000)
+
+    let snapshot = PortManagerSnapshot(
+        phyData: [PhyInput(phyID: 0, portNumber: 1)],
+        tbData: [ThunderboltInput(socketID: 1)],
+        deviceData: [outerHub, innerHub, atom]
+    )
+
+    manager.applySnapshot(snapshot)
+    let port = manager.ports.first { $0.id == 1 }
+
+    #expect(port?.usbDevices.count == 3)
+    #expect(port?.usbDevices.map(\.productName) == ["USB2.0 Hub", "USB2.0 Hub", "ATOM"])
+
+    let atomInfo = port?.usbDevices.last
+    #expect(atomInfo?.hubDepth == 2)
+    #expect(atomInfo?.viaName == "USB2.0 Hub")
+
+    #expect(port?.usbDevice?.productName == "ATOM")
+    #expect(port?.additionalDeviceCount == 0)
+}
+
+// The free tier fronts the first real device in tree order regardless of
+// where the hub sits in the enumeration order.
+@Test func portManagerPrimarySelectionPrefersNonHubRegardlessOfOrder() {
+    let hubFirst = PortManager()
+    hubFirst.applySnapshot(
+        PortManagerSnapshot(
+            phyData: [PhyInput(phyID: 0, portNumber: 1)],
+            tbData: [ThunderboltInput(socketID: 1)],
+            deviceData: [
+                DeviceInput(portNumber: 1, productName: "Hub", deviceClass: 0x09, locationID: 0x1100000),
+                DeviceInput(portNumber: 1, productName: "Keyboard", locationID: 0x1110000)
+            ]
+        )
+    )
+    #expect(hubFirst.ports.first { $0.id == 1 }?.usbDevice?.productName == "Keyboard")
+
+    let hubSecond = PortManager()
+    hubSecond.applySnapshot(
+        PortManagerSnapshot(
+            phyData: [PhyInput(phyID: 0, portNumber: 1)],
+            tbData: [ThunderboltInput(socketID: 1)],
+            deviceData: [
+                DeviceInput(portNumber: 1, productName: "Keyboard", locationID: 0x1110000),
+                DeviceInput(portNumber: 1, productName: "Hub", deviceClass: 0x09, locationID: 0x1100000)
+            ]
+        )
+    )
+    #expect(hubSecond.ports.first { $0.id == 1 }?.usbDevice?.productName == "Keyboard")
+}
+
+// A port with only hubs attached (nothing real behind them) still fronts
+// the first hub rather than going nil, and "+N more" stays at zero since
+// hubs are plumbing, not something the user plugged in.
+@Test func portManagerHubOnlyPortFrontsFirstHub() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        phyData: [PhyInput(phyID: 0, portNumber: 1)],
+        tbData: [ThunderboltInput(socketID: 1)],
+        deviceData: [
+            DeviceInput(portNumber: 1, productName: "Outer Hub", deviceClass: 0x09, locationID: 0x1100000),
+            DeviceInput(portNumber: 1, productName: "Inner Hub", deviceClass: 0x09, locationID: 0x1110000)
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+    let port = manager.ports.first { $0.id == 1 }
+
+    #expect(port?.usbDevice != nil)
+    #expect(port?.usbDevice?.productName == "Outer Hub")
+    #expect(port?.additionalDeviceCount == 0)
+}
+
+// A hub with two real devices behind it plus the fronted one: "+N more"
+// counts the real devices beyond the one already shown, not the hub.
+@Test func portManagerAdditionalDeviceCountExcludesHubs() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        phyData: [PhyInput(phyID: 0, portNumber: 1)],
+        tbData: [ThunderboltInput(socketID: 1)],
+        deviceData: [
+            DeviceInput(portNumber: 1, productName: "Hub", deviceClass: 0x09, locationID: 0x1100000),
+            DeviceInput(portNumber: 1, productName: "Mouse", locationID: 0x1110000),
+            DeviceInput(portNumber: 1, productName: "Keyboard", locationID: 0x1120000),
+            DeviceInput(portNumber: 1, productName: "Webcam", locationID: 0x1130000)
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+    let port = manager.ports.first { $0.id == 1 }
+
+    #expect(port?.usbDevice?.productName == "Mouse")
+    #expect(port?.additionalDeviceCount == 2)
+}
+
+// A port can have two devices attached directly (two independent roots,
+// no shared hub). Both subtrees must come back, each in pre-order, and the
+// roots keep the order they were enumerated in.
+@Test func portManagerHandlesTwoIndependentRoots() {
+    let manager = PortManager()
+
+    let firstRoot = DeviceInput(portNumber: 1, productName: "Dock A", deviceClass: 0x09, locationID: 0x1100000)
+    let firstChild = DeviceInput(portNumber: 1, productName: "Dock A Bay", locationID: 0x1110000)
+    let secondRoot = DeviceInput(portNumber: 1, productName: "Dock B", deviceClass: 0x09, locationID: 0x1200000)
+    let secondChild = DeviceInput(portNumber: 1, productName: "Dock B Bay", locationID: 0x1210000)
+
+    let snapshot = PortManagerSnapshot(
+        phyData: [PhyInput(phyID: 0, portNumber: 1)],
+        tbData: [ThunderboltInput(socketID: 1)],
+        deviceData: [firstRoot, firstChild, secondRoot, secondChild]
+    )
+
+    manager.applySnapshot(snapshot)
+    let names = manager.ports.first { $0.id == 1 }?.usbDevices.map(\.productName)
+
+    #expect(names == ["Dock A", "Dock A Bay", "Dock B", "Dock B Bay"])
+}
+
+// Two ports whose devices happen to share overlapping locationIDs (a real
+// possibility since locationID is only unique within a bus) must not bleed
+// into each other's tree. buildDeviceTree operates on each port's own
+// slice, never the whole deviceData array.
+@Test func portManagerIsolatesDeviceTreesAcrossPorts() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        phyData: [
+            PhyInput(phyID: 0, portNumber: 1),
+            PhyInput(phyID: 1, portNumber: 2)
+        ],
+        tbData: [
+            ThunderboltInput(socketID: 1),
+            ThunderboltInput(socketID: 2)
+        ],
+        deviceData: [
+            DeviceInput(portNumber: 1, productName: "Port 1 Hub", deviceClass: 0x09, locationID: 0x1100000),
+            DeviceInput(portNumber: 1, productName: "Port 1 Device", locationID: 0x1110000),
+            DeviceInput(portNumber: 2, productName: "Port 2 Hub", deviceClass: 0x09, locationID: 0x1100000),
+            DeviceInput(portNumber: 2, productName: "Port 2 Device", locationID: 0x1110000)
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+    let port1Names = manager.ports.first { $0.id == 1 }?.usbDevices.map(\.productName)
+    let port2Names = manager.ports.first { $0.id == 2 }?.usbDevices.map(\.productName)
+
+    #expect(port1Names == ["Port 1 Hub", "Port 1 Device"])
+    #expect(port2Names == ["Port 2 Hub", "Port 2 Device"])
+}
+
+// Two devices reporting the same locationID as roots (a real registry
+// anomaly, since locationID collisions do happen) plus one child of that
+// shared location. Each device must still be emitted exactly once, and since
+// both roots compete for the same child, the child attaches to whichever
+// root visits it first in enumeration order, never doubling up.
+@Test func portManagerPinsChildToFirstRootWhenLocationIDsCollide() {
+    let manager = PortManager()
+
+    let firstRoot = DeviceInput(portNumber: 1, productName: "Root A", deviceClass: 0x09, locationID: 0x1100000)
+    let secondRoot = DeviceInput(portNumber: 1, productName: "Root B", deviceClass: 0x09, locationID: 0x1100000)
+    let child = DeviceInput(portNumber: 1, productName: "Child", locationID: 0x1110000)
+
+    let snapshot = PortManagerSnapshot(
+        phyData: [PhyInput(phyID: 0, portNumber: 1)],
+        tbData: [ThunderboltInput(socketID: 1)],
+        deviceData: [firstRoot, secondRoot, child]
+    )
+
+    manager.applySnapshot(snapshot)
+    let names = manager.ports.first { $0.id == 1 }?.usbDevices.map(\.productName)
+
+    #expect(names == ["Root A", "Child", "Root B"])
+    #expect(names?.count == 3)
 }
 
 // DP tunnel link rate (from PHY tunnel data) flows onto PortState even when
