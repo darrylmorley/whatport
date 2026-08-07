@@ -123,6 +123,13 @@ public final class SMCPowerReader: @unchecked Sendable {
     // opening the SMC and fetching bytes.
     static func buildPortPowerChannels(readKey: (String) -> [UInt8]?) -> [RawSMCPortPower] {
         var channels: [RawSMCPortPower] = []
+        // Bound is 4, not 6, even though 6-port M2 Ultra Mac Studios exist. Those
+        // machines publish D5UI/D6UI (the join UUID) but no D5/D6 power-rail keys
+        // (no D5JV/D5JI/D5PR etc) in any corpus capture, so raising the bound would
+        // only admit UUID-only channels whose rails all read as zero. As of
+        // 2026-08-07 (whatcable corpus, probe 34, ~696 machines with D-channels)
+        // the max D-index is 4 everywhere except three M2 Ultra captures with D6.
+        // Re-check if an 8-port Mac Pro ever lands in the corpus.
         for index in 1...4 {
             guard let uuid = readKey("D\(index)UI").flatMap(decodeUUID), !uuid.isEmpty else { continue }
             channels.append(RawSMCPortPower(

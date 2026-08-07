@@ -14,8 +14,18 @@ public struct RawThunderboltData: Sendable {
     public let socketID: String
     public let portNumber: Int
     public let currentLinkWidth: Int
+    // Speed reference (from research):
+    //
+    // Current Link Speed (a single code; among the nonzero codes, lower is faster):
+    //   0x0 = idle
+    //   0x8 = 10 Gb/s per lane (TB3)
+    //   0x4 = 20 Gb/s per lane (TB4/USB4)
+    //   0x2 = 40 Gb/s per lane (TB5/USB4 v2)
     public let currentLinkSpeed: Int
     public let supportedLinkWidth: Int
+    // Supported Link Speed: a bitmask of the Current Link Speed codes.
+    //   12 (0x4 | 0x8) = TB4-class controller
+    //   14 (0x2 | 0x4 | 0x8) = TB5-capable controller
     public let supportedLinkSpeed: Int
     public let targetLinkWidth: Int
     public let targetLinkSpeed: Int
@@ -24,10 +34,6 @@ public struct RawThunderboltData: Sendable {
     public let thunderboltVersion: Int
     public let dualLinkPort: Int
 
-    // Speed reference (from research):
-    //   0 = idle
-    //   4 = 20 Gbps/lane (USB4 Gen3 / TB4)
-    //  12 = 40 Gbps/lane (USB4 Gen4 / TB5)
     public var isActive: Bool {
         currentLinkWidth > 0 && currentLinkSpeed > 0
     }
