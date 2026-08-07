@@ -50,3 +50,32 @@ import Testing
     let device = try #require(DeviceReader.parse(properties: properties, portNumber: 1))
     #expect(device.speedCode == 3)
 }
+
+// Live: end-to-end over the real registry, the only automated coverage of
+// readUSBDevices()'s ancestor walks (the corpus sweep exercises the path
+// parser, not the walk). Two properties must hold on any Mac:
+//   1. No fabricated ports. The resolver skips a device it cannot place, so
+//      port 0 must never appear.
+//   2. No wrong-card attribution. A resolved port within the roster's range
+//      must be a port the roster actually has; the old sequential fallback
+//      broke exactly this (device on physical port 4 filed under 3). Ports
+//      beyond the roster's range are allowed: some machines wire extra ports
+//      through discrete controllers (e.g. ASMedia) the HPM roster never
+//      enumerates, and PortManager drops those joins harmlessly.
+@Test func liveDevicePortsJoinTheRoster() {
+    let devices = DeviceReader.readUSBDevices()
+
+    for device in devices {
+        #expect(device.portNumber > 0, "Fabricated port for \(device.productName)")
+    }
+
+    let usbCPorts = Set(HPMReader.readAll().filter { !$0.isMagSafe }.map(\.portNumber))
+    guard let maxRosterPort = usbCPorts.max() else { return }
+
+    for device in devices where device.portNumber <= maxRosterPort {
+        #expect(
+            usbCPorts.contains(device.portNumber),
+            "\(device.productName) attributed to port \(device.portNumber), roster \(usbCPorts.sorted())"
+        )
+    }
+}

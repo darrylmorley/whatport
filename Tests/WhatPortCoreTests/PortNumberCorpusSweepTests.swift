@@ -196,6 +196,72 @@ struct PortNumberCorpusSweepTests {
         try #require(checked > 500, "Expected hundreds of paths, got \(checked)")
     }
 
+    @Test("Probe 38 device UsbIOPort resolves to a port on the machine's roster", .enabled(if: ProbeCorpus.isAvailable))
+    func probe38UsbIOPortResolvesToARosterPort() throws {
+
+        var exercised = 0
+        var offRoster: [String] = []
+
+        for machine in ProbeCorpus.machines {
+            guard let deviceOutput = machine.probe("38_usb_device_tree.json") else { continue }
+            let paths = Self.usbIOPortPaths(in: deviceOutput)
+            guard !paths.isEmpty else { continue }
+
+            guard let rosterOutput = machine.probe("35_hpm_port_uuid.json") else { continue }
+            let usbCPorts = Set(
+                ProbeCorpus.roster(in: rosterOutput)
+                    .filter { $0.portType == "USB-C" }
+                    .map(\.portNumber)
+            )
+            guard !usbCPorts.isEmpty else { continue }
+
+            for path in paths {
+                guard let portNumber = PortStatsReader.usbCPortNumber(fromPath: path) else { continue }
+                exercised += 1
+                if !usbCPorts.contains(portNumber) {
+                    offRoster.append("\(machine.name) \(path) -> port \(portNumber), roster \(usbCPorts.sorted())")
+                }
+            }
+        }
+
+        // A floor, not a census pin: the corpus grows, and the count is only
+        // here to catch the loader silently breaking (e.g. probe 38's format
+        // changing under it and every block quietly matching nothing).
+        try #require(exercised >= 100, "Expected at least 100 UsbIOPort resolutions, got \(exercised)")
+
+        // Almost every resolution lands on the roster probe 35 built for the
+        // same machine, but not quite all: a handful of machines attach
+        // devices through a short "AppleARMPE/port-usb-c-N" path family that
+        // parses to a valid port number but names a port the SPMI/I2C HPM bus
+        // never enumerates, so it never reaches this machine's roster either.
+        // That device is silently dropped by PortManager's port-number join,
+        // same as an unresolved one, so it is not a misattribution, just a
+        // port this app does not track. A ratio floor (not #expect(isEmpty))
+        // is what keeps that legitimate case from making this sweep flaky
+        // while still catching a real regression in the resolver.
+        let onRosterRatio = Double(exercised - offRoster.count) / Double(exercised)
+        #expect(
+            onRosterRatio > 0.9,
+            "Only \(exercised - offRoster.count) of \(exercised) resolved on-roster: \(offRoster.prefix(5))"
+        )
+    }
+
+    // Probe 38 prints one device block per USB device, each with an
+    // IOService-plane ancestor chain. "UsbIOPort=" appears on at most one
+    // ancestor line per device (the port-interface node closest to the XHCI
+    // root port), and the probe never puts a space in the path itself, so a
+    // plain per-line scan is enough: no need to track block boundaries.
+    private static func usbIOPortPaths(in output: String) -> [String] {
+        var paths: [String] = []
+        for line in output.split(separator: "\n").map(String.init) {
+            guard let range = line.range(of: "UsbIOPort=") else { continue }
+            let path = String(line[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+            guard !path.isEmpty else { continue }
+            paths.append(path)
+        }
+        return paths
+    }
+
     // The corpus records the OS version per probe file; the directory name
     // carries it too, and the two agree.
     private static func macOSMajor(of machine: ProbeCorpus.Machine) -> String? {

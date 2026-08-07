@@ -3,9 +3,14 @@ import IOKit
 
 // Reads connected USB device info from IOUSBHostDevice services.
 //
-// Each USB device's parent is a USB port (AppleUSB30XHCIARMPort or
-// AppleUSB20XHCIARMPort) which has "UsbCPortNumber" mapping directly
-// to the physical USB-C port. One level up, no tree walking needed.
+// Each device is resolved to a physical port by walking up its IOService-plane
+// ancestors: "UsbIOPort" is a registry path straight to the HPM port node, so
+// it joins directly to the roster the rest of the app builds, and it can sit
+// many levels above a device behind cascaded hubs. Where that isn't published
+// (macOS 15), the device-tree "port-number" on a closer ancestor is the
+// fallback. See the resolution comment in readUSBDevices() and
+// PortStatsReader.physicalPortNumber(of:) for the fuller reasoning, including
+// why UsbCPortNumber is not consulted at all.
 //
 // Device Speed values (from IOUSBHostFamily):
 //   0 = Low Speed (1.5 Mbps)
@@ -42,16 +47,34 @@ public enum DeviceReader {
             guard locationID > 0, !seen.contains(locationID) else { return }
             seen.insert(locationID)
 
-            // Prefer the device-tree "port-number" from the usb-drd node: it
-            // is the true physical port (matching the HPM @N and the rest of
-            // the port roster). The XHCI "UsbCPortNumber" numbers ports
-            // sequentially (1/2/3) and disagrees with the physical numbering
-            // (1/2/4) on Macs that skip a port, so a device on physical port 4
-            // would otherwise be tied to a non-existent port 3 and dropped.
-            // Fall back to UsbCPortNumber only when port-number isn't reachable.
-            let portNumber = ioFirstAncestorDataInt(service, key: "port-number", maxLevels: 10)
-                ?? ioInt(ioParentProperty(service, key: "UsbCPortNumber")).nonZero
-                ?? 0
+            // Primary: "UsbIOPort" is a registry path straight to the HPM port
+            // node, so it joins directly to the roster the rest of the app
+            // builds. A device behind cascaded hubs can carry it many levels
+            // up: corpus probe 38's deepest match sits at ancestor index 12,
+            // which is walk level 13 here (probe 38 indexes from the parent,
+            // this walk from the device itself; one hub tier is 3 registry
+            // nodes), so 15 leaves two levels of headroom. This bound is
+            // deliberately wider than
+            // PortStatsReader's root-port walk (6), which starts much closer
+            // to the HPM node.
+            //
+            // Fallback: the device-tree "port-number" on a usb-drd ancestor,
+            // load-bearing on macOS 15, which publishes UsbIOPort nowhere.
+            //
+            // UsbCPortNumber is not consulted. It numbers ports sequentially
+            // (1/2/3) and disagrees with the physical numbering (1/2/4) on
+            // Macs that skip a port, which misattributed 60 of 1426 corpus
+            // records. PortStatsReader.physicalPortNumber(of:) made the same
+            // call for the same reason.
+            //
+            // When neither resolves, skip the device rather than record it
+            // against a fabricated port 0: PortManager silently dropped those
+            // records anyway, so this is the same outcome made explicit.
+            guard let portNumber = ioFirstAncestorString(service, key: "UsbIOPort", maxLevels: 15)
+                .flatMap(PortStatsReader.usbCPortNumber(fromPath:))
+                ?? ioFirstAncestorDataInt(service, key: "port-number", maxLevels: 10),
+                portNumber > 0
+            else { return }
 
             if let device = parse(properties: props, portNumber: portNumber) {
                 results.append(device)
@@ -86,9 +109,4 @@ public enum DeviceReader {
             serialNumber: ioString(properties["kUSBSerialNumberString"])
         )
     }
-}
-
-// Small helper to treat 0 as nil for optional chaining.
-private extension Int {
-    var nonZero: Int? { self != 0 ? self : nil }
 }

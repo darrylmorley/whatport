@@ -163,6 +163,35 @@ func ioFirstAncestorDataInt(_ service: io_service_t, key: String, maxLevels: Int
     return nil
 }
 
+// Walk up the IOService plane from `service` and return the first String
+// property found, within `maxLevels` steps (inclusive of `service` itself at
+// level 0).
+//
+// Used to find the device-tree "UsbIOPort" path that joins a USB device to
+// its physical port node in the HPM roster. The depth varies: a device
+// plugged straight into a Mac port finds it a few levels up, while a device
+// behind cascaded hubs finds it much deeper. A fixed-level walk misses the
+// deeper case, so we search up to a generous bound and stop at the first
+// match.
+func ioFirstAncestorString(_ service: io_service_t, key: String, maxLevels: Int) -> String? {
+    var current = service
+    IOObjectRetain(current)
+    defer { IOObjectRelease(current) }
+
+    for _ in 0...maxLevels {
+        if let value = ioProperty(current, key: key) as? String, !value.isEmpty {
+            return value
+        }
+        var parent: io_registry_entry_t = 0
+        guard IORegistryEntryGetParentEntry(current, kIOServicePlane, &parent) == KERN_SUCCESS else {
+            return nil
+        }
+        IOObjectRelease(current)
+        current = parent
+    }
+    return nil
+}
+
 // Get the IOKit registry entry name for a service (e.g. "Port-USB-C@4").
 //
 // Unlike the class name, this is the node's name in the service plane.
