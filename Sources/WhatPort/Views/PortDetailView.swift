@@ -223,6 +223,23 @@ struct PortDetailView: View {
                 }
             }
 
+            // A live TB link enumerates its own USB2 companion endpoint (or a
+            // dock's USB2 billboard device) alongside the tunnelled data path.
+            // Without this note the 480 Mbps shown above reads as the whole
+            // connection's speed, when the real data runs over the Thunderbolt
+            // card below. The wording stays device-agnostic on purpose: the
+            // shown device can also be a genuine USB2 peripheral behind a
+            // dock's hub, and the sentence must stay true in that case too.
+            // Layout: hasLiveThunderboltLink forces primaryProtocol to
+            // .thunderbolt, whose branch is the only one rendering both cards,
+            // with thunderboltSection after deviceSection. If that ordering
+            // ever changes, "below" here is wrong.
+            if Self.isUSB2SpeedOnLiveThunderboltLink(speed: device.speed, hasLiveThunderboltLink: port.hasLiveThunderboltLink) {
+                Text("This is the device's own USB speed, not the connection's. Data runs over the Thunderbolt link below.")
+                    .scaledFont(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             if let serial = device.serialNumber {
                 HStack {
                     Text("Serial")
@@ -235,6 +252,21 @@ struct PortDetailView: View {
                         .truncationMode(.middle)
                 }
             }
+        }
+    }
+
+    // True when the enumerated USB device is USB2-speed (<= 480 Mbps) while
+    // the port has a live Thunderbolt link. Usually that device is the link's
+    // own companion endpoint or a dock's billboard device, but it can be a
+    // genuine USB2 peripheral behind a dock's hub; either way the port's
+    // data path is the Thunderbolt link, not this device's 480 Mbps. Keyed
+    // off speed rather than device identity so any dock exhibiting the same
+    // pattern is covered automatically.
+    static func isUSB2SpeedOnLiveThunderboltLink(speed: USBSpeed?, hasLiveThunderboltLink: Bool) -> Bool {
+        guard hasLiveThunderboltLink, let speed else { return false }
+        switch speed {
+        case .lowSpeed, .fullSpeed, .highSpeed: return true
+        case .superSpeed, .superSpeedPlus, .superSpeed2x2: return false
         }
     }
 
