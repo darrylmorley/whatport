@@ -102,7 +102,8 @@ enum SnapshotAdapter {
                     usbVersion: d.usbVersion,
                     deviceClass: d.deviceClass,
                     currentDraw: d.currentDraw,
-                    serialNumber: d.serialNumber
+                    serialNumber: d.serialNumber,
+                    locationID: d.locationID
                 )
             },
             displayData: snapshot.displayData.map { d in

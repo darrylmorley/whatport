@@ -29,6 +29,7 @@ public struct RawDeviceInfo: Sendable {
     public let deviceClass: Int      // bDeviceClass (8 = storage, etc.)
     public let currentDraw: Int      // UsbPowerSinkAllocation in mA
     public let serialNumber: String  // kUSBSerialNumberString (hex-encoded)
+    public let locationID: Int       // encodes the USB hub-topology path
 }
 
 public enum DeviceReader {
@@ -43,7 +44,7 @@ public enum DeviceReader {
             guard !productName.isEmpty else { return }
 
             // Dedup by locationID (same device appears at multiple levels)
-            let locationID = ioInt(props["locationID"])
+            let locationID = ioUInt32(props["locationID"])
             guard locationID > 0, !seen.contains(locationID) else { return }
             seen.insert(locationID)
 
@@ -90,7 +91,9 @@ public enum DeviceReader {
     // replayed through it directly.
     //
     // portNumber comes in rather than being read here because it lives on
-    // ancestor nodes, not on the device itself.
+    // ancestor nodes, not on the device itself. locationID, in contrast, is
+    // read straight from properties here, the same way readUSBDevices()
+    // reads it for the dedup check: it lives on the device's own properties.
     static func parse(properties: [String: Any], portNumber: Int) -> RawDeviceInfo? {
         let productName = ioString(properties["USB Product Name"])
         guard !productName.isEmpty else { return nil }
@@ -106,7 +109,8 @@ public enum DeviceReader {
             usbVersion: ioInt(properties["bcdUSB"]),
             deviceClass: ioInt(properties["bDeviceClass"]),
             currentDraw: ioInt(properties["UsbPowerSinkAllocation"]),
-            serialNumber: ioString(properties["kUSBSerialNumberString"])
+            serialNumber: ioString(properties["kUSBSerialNumberString"]),
+            locationID: ioUInt32(properties["locationID"])
         )
     }
 }

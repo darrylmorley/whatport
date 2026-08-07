@@ -621,6 +621,7 @@ public struct DeviceInput: Sendable {
     public let deviceClass: Int     // bDeviceClass (8 = storage, etc.)
     public let currentDraw: Int     // mA allocated
     public let serialNumber: String
+    public let locationID: Int      // encodes the USB hub-topology path
 
     public init(
         portNumber: Int,
@@ -630,7 +631,8 @@ public struct DeviceInput: Sendable {
         usbVersion: Int = 0,
         deviceClass: Int = 0,
         currentDraw: Int = 0,
-        serialNumber: String = ""
+        serialNumber: String = "",
+        locationID: Int = 0
     ) {
         self.portNumber = portNumber
         self.productName = productName
@@ -640,6 +642,7 @@ public struct DeviceInput: Sendable {
         self.deviceClass = deviceClass
         self.currentDraw = currentDraw
         self.serialNumber = serialNumber
+        self.locationID = locationID
     }
 }
 

@@ -15,6 +15,15 @@ func ioInt(_ value: Any?) -> Int {
     return 0
 }
 
+// For unsigned 32-bit registry values whose bit pattern matters, e.g.
+// locationID. NSNumber.intValue sign-extends an SInt32-boxed value with
+// bit 31 set into a negative Int, which would corrupt bit arithmetic done
+// on the value later; uint32Value preserves the unsigned magnitude.
+func ioUInt32(_ value: Any?) -> Int {
+    guard let n = value as? NSNumber else { return 0 }
+    return Int(n.uint32Value)
+}
+
 func ioBool(_ value: Any?) -> Bool {
     if let n = value as? NSNumber { return n.boolValue }
     if let b = value as? Bool { return b }
