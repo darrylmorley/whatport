@@ -49,4 +49,14 @@ public final class PluginRegistry {
     public func register(panel: @escaping (_ dismiss: @escaping () -> Void) -> AnyView) {
         panelBuilders.append(panel)
     }
+
+    // Per-port detail cards contributed by plugins, rendered below the host
+    // app's own device card in PortDetailView. Returns nil when the plugin
+    // has nothing to show for this port (e.g. locked, or not enough devices
+    // to be worth a card); the caller decides what to do when every builder
+    // returns nil, including any "+N more" fallback of its own.
+    public private(set) var deviceTreeBuilders: [(PortState) -> AnyView?] = []
+    public func register(deviceTreeBuilder: @escaping (PortState) -> AnyView?) {
+        deviceTreeBuilders.append(deviceTreeBuilder)
+    }
 }

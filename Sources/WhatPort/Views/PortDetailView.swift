@@ -108,10 +108,7 @@ struct PortDetailView: View {
 
         case .usbOnly:
             if let device = port.usbDevice {
-                sectionCard {
-                    deviceSection(device)
-                    displayResolutionRow
-                }
+                deviceCardGroup(device)
             }
             connectionsCard
             sectionCard { laneInfoSection }
@@ -128,10 +125,7 @@ struct PortDetailView: View {
 
         case .thunderbolt:
             if let device = port.usbDevice {
-                sectionCard {
-                    deviceSection(device)
-                    displayResolutionRow
-                }
+                deviceCardGroup(device)
             } else if port.displayWidth > 0 && port.displayHeight > 0 {
                 // Display with no USB device (e.g. a pure DP monitor): the
                 // resolution still gets a card rather than floating loose.
@@ -155,10 +149,7 @@ struct PortDetailView: View {
 
         case .displayPort:
             if let device = port.usbDevice {
-                sectionCard {
-                    deviceSection(device)
-                    displayResolutionRow
-                }
+                deviceCardGroup(device)
             } else if port.displayWidth > 0 && port.displayHeight > 0 {
                 sectionCard { displayResolutionRow }
             }
@@ -191,9 +182,37 @@ struct PortDetailView: View {
         }
     }
 
+    // The device card plus any plugin device-tree cards, as one group. Calls
+    // every registered builder exactly once per body evaluation and shares
+    // that one result between the "+N more" gate (deviceSection) and the
+    // cards themselves, so the two decisions can never disagree about
+    // whether a plugin actually had something to show for this port.
+    //
+    // Builders run here, inside body, rather than being cached across
+    // evaluations: PluginRegistry's builder reads LicenceManager.shared
+    // .isUnlocked (an @Observable property), so recomputing on every body
+    // evaluation is what lets an in-progress unlock replace the "+N more"
+    // line with the tree live, without the user needing to reopen the card.
+    //
+    // Each card owns its own chrome and is only ever present here because
+    // its builder had something to show, so this stays unwrapped rather
+    // than going through sectionCard (which would draw a visible empty box
+    // around nothing).
+    @ViewBuilder
+    private func deviceCardGroup(_ device: USBDeviceInfo) -> some View {
+        let pluginCards = PluginRegistry.shared.deviceTreeBuilders.compactMap { $0(port) }
+        sectionCard {
+            deviceSection(device, pluginCardsEmpty: pluginCards.isEmpty)
+            displayResolutionRow
+        }
+        ForEach(Array(pluginCards.enumerated()), id: \.offset) { _, card in
+            card
+        }
+    }
+
     // MARK: - Device
 
-    private func deviceSection(_ device: USBDeviceInfo) -> some View {
+    private func deviceSection(_ device: USBDeviceInfo, pluginCardsEmpty: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             sectionHeader("Device")
 
@@ -252,7 +271,25 @@ struct PortDetailView: View {
                         .truncationMode(.middle)
                 }
             }
+
+            // Free-tier count of the devices behind this one. Hidden when a
+            // plugin actually rendered a device-tree card for this port: that
+            // card renders right below and spells the same devices out, so
+            // the count would just repeat them. Driven by the caller's own
+            // builder output (pluginCardsEmpty), not by whether a builder is
+            // merely registered, so a locked user (whose builder returns nil)
+            // still sees the count instead of neither.
+            if port.additionalDeviceCount > 0, pluginCardsEmpty {
+                Text(Self.additionalDeviceLabel(count: port.additionalDeviceCount))
+                    .scaledFont(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
+    }
+
+    // The count already excludes hubs (PortState.additionalDeviceCount).
+    static func additionalDeviceLabel(count: Int) -> String {
+        "+\(count) more"
     }
 
     // True when the enumerated USB device is USB2-speed (<= 480 Mbps) while
