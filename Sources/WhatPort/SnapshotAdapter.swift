@@ -180,7 +180,8 @@ enum SnapshotAdapter {
                     present: s.present,
                     volts: s.volts,
                     amps: s.amps,
-                    uuid: s.uuid
+                    uuid: s.uuid,
+                    channel: s.channel
                 )
             },
             smcPortContracts: snapshot.smcPortContracts.map { c in

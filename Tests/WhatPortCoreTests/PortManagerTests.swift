@@ -1221,3 +1221,311 @@ import Testing
 
     #expect(manager.ports.first?.pdReliability == nil)
 }
+
+// MARK: - PD reliability keyed UUID cross-check (DAR-324)
+//
+// The ordinal join above trusts array order. Where a second, keyed route
+// also resolves -- PortControllerInfo entry offset j <-> SMC D-channel
+// index j+1, and that channel's DxUI equals the port's own HPM UUID -- it
+// must agree with the ordinal join, or the whole snapshot's PD attribution
+// is dropped rather than guessed at.
+
+// The keyed route resolves on every offset and agrees with the ordinal
+// join, exactly the corpus's 97/97 case: counters attach as the ordinal
+// join alone would.
+@Test func portManagerAttachesPDReliabilityWhenKeyedCrossCheckAgrees() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        hpmPorts: [
+            HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C"),
+            HPMPortInput(uuid: "BBBB", portNumber: 2, portType: "USB-C"),
+        ],
+        phyData: [
+            PhyInput(phyID: 0, portNumber: 1),
+            PhyInput(phyID: 1, portNumber: 2),
+        ],
+        tbData: [
+            ThunderboltInput(socketID: 1),
+            ThunderboltInput(socketID: 2),
+        ],
+        pdReliabilityData: [
+            PDReliabilityInput(entryOffset: 0, attachCount: 3),
+            PDReliabilityInput(entryOffset: 1, attachCount: 7),
+        ],
+        smcPortPower: [
+            // D1 (offset 0) -> port 1, D2 (offset 1) -> port 2: agrees with
+            // the ordinal join on both offsets.
+            SMCPortPowerInput(present: true, volts: 5, amps: 1, uuid: "aaaa", channel: 1),
+            SMCPortPowerInput(present: true, volts: 5, amps: 1, uuid: "bbbb", channel: 2),
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    let port1 = manager.ports.first { $0.id == 1 }
+    let port2 = manager.ports.first { $0.id == 2 }
+
+    #expect(port1?.pdReliability?.attachCount == 3)
+    #expect(port2?.pdReliability?.attachCount == 7)
+}
+
+// A resolved keyed offset that disagrees with the ordinal join drops PD
+// attribution for the WHOLE snapshot, not just the disputed offset: D1's
+// UUID resolves to port 2, but the ordinal join maps offset 0 to port 1.
+@Test func portManagerDropsAllPDReliabilityWhenKeyedCrossCheckDisagrees() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        hpmPorts: [
+            HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C"),
+            HPMPortInput(uuid: "BBBB", portNumber: 2, portType: "USB-C"),
+        ],
+        phyData: [
+            PhyInput(phyID: 0, portNumber: 1),
+            PhyInput(phyID: 1, portNumber: 2),
+        ],
+        tbData: [
+            ThunderboltInput(socketID: 1),
+            ThunderboltInput(socketID: 2),
+        ],
+        pdReliabilityData: [
+            PDReliabilityInput(entryOffset: 0, attachCount: 3),
+            PDReliabilityInput(entryOffset: 1, attachCount: 7),
+        ],
+        smcPortPower: [
+            // D1 (offset 0) resolves to port 2's UUID, not port 1's: the
+            // ordinal join says offset 0 -> port 1.
+            SMCPortPowerInput(present: true, volts: 5, amps: 1, uuid: "bbbb", channel: 1),
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    #expect(manager.ports.allSatisfy { $0.pdReliability == nil })
+}
+
+// A channel whose UUID matches no USB-C port is unresolved, not a
+// disagreement: the ordinal join stands unchanged.
+@Test func portManagerKeepsOrdinalPDReliabilityWhenKeyedRouteUnresolved() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        hpmPorts: [
+            HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C"),
+            HPMPortInput(uuid: "BBBB", portNumber: 2, portType: "USB-C"),
+        ],
+        phyData: [
+            PhyInput(phyID: 0, portNumber: 1),
+            PhyInput(phyID: 1, portNumber: 2),
+        ],
+        tbData: [
+            ThunderboltInput(socketID: 1),
+            ThunderboltInput(socketID: 2),
+        ],
+        pdReliabilityData: [
+            PDReliabilityInput(entryOffset: 0, attachCount: 3),
+            PDReliabilityInput(entryOffset: 1, attachCount: 7),
+        ],
+        smcPortPower: [
+            // Matches no roster port: the chain does not resolve for offset 0.
+            SMCPortPowerInput(present: true, volts: 5, amps: 1, uuid: "ffffffffffffffffffffffffffffffff", channel: 1),
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    let port1 = manager.ports.first { $0.id == 1 }
+    let port2 = manager.ports.first { $0.id == 2 }
+
+    #expect(port1?.pdReliability?.attachCount == 3)
+    #expect(port2?.pdReliability?.attachCount == 7)
+}
+
+// Two USB-C ports sharing a UUID makes the keyed route ambiguous for that
+// offset, which is treated as unresolved (never as a disagreement): the
+// ordinal join stands unchanged.
+@Test func portManagerKeepsOrdinalPDReliabilityWhenKeyedRouteIsAmbiguous() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        hpmPorts: [
+            HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C"),
+            HPMPortInput(uuid: "AAAA", portNumber: 2, portType: "USB-C"),
+        ],
+        phyData: [
+            PhyInput(phyID: 0, portNumber: 1),
+            PhyInput(phyID: 1, portNumber: 2),
+        ],
+        tbData: [
+            ThunderboltInput(socketID: 1),
+            ThunderboltInput(socketID: 2),
+        ],
+        pdReliabilityData: [
+            PDReliabilityInput(entryOffset: 0, attachCount: 3),
+            PDReliabilityInput(entryOffset: 1, attachCount: 7),
+        ],
+        smcPortPower: [
+            // "aaaa" matches both port 1 and port 2: ambiguous, so offset 0
+            // is left unresolved rather than picking either port.
+            SMCPortPowerInput(present: true, volts: 5, amps: 1, uuid: "aaaa", channel: 1),
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    let port1 = manager.ports.first { $0.id == 1 }
+    let port2 = manager.ports.first { $0.id == 2 }
+
+    #expect(port1?.pdReliability?.attachCount == 3)
+    #expect(port2?.pdReliability?.attachCount == 7)
+}
+
+// The MagSafe controller never has a D-channel and never receives an
+// ordinal entry (see portManagerNeverAttachesPDReliabilityToMagSafe above);
+// the keyed cross-check must not let a trailing MagSafe entry, or a channel
+// index beyond the USB-C port count, touch it either.
+@Test func portManagerMagSafeTailEntryNeverParticipatesInKeyedCrossCheck() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        hpmPorts: [
+            HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C"),
+            HPMPortInput(uuid: "MMMM", portNumber: 1, portType: "MagSafe 3"),
+        ],
+        phyData: [PhyInput(phyID: 0, portNumber: 1)],
+        tbData: [ThunderboltInput(socketID: 1)],
+        ccData: [CCInput(portNumber: 1, portType: "MagSafe 3", active: true)],
+        pdReliabilityData: [
+            PDReliabilityInput(entryOffset: 0, attachCount: 5),
+            // The trailing MagSafe-controller entry: never consumed by the
+            // ordinal join (only 1 USB-C port), so never checked either.
+            PDReliabilityInput(entryOffset: 1, attachCount: 99),
+        ],
+        smcPortPower: [
+            // D1 (offset 0) agrees with the ordinal join.
+            SMCPortPowerInput(present: true, volts: 5, amps: 1, uuid: "aaaa", channel: 1),
+            // D2 would be the MagSafe controller's channel if one existed.
+            // Present here pointing at MagSafe's own UUID to prove it is
+            // still never looked at: offset 1 is out of range with only 1
+            // USB-C port.
+            SMCPortPowerInput(present: true, volts: 5, amps: 1, uuid: "mmmm", channel: 2),
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    let usbcPort = manager.ports.first { $0.portType == .usbC }
+    let magSafePort = manager.ports.first { $0.portType == .magSafe }
+
+    #expect(usbcPort?.pdReliability?.attachCount == 5)
+    #expect(magSafePort?.pdReliability == nil)
+}
+
+// Two SMC channels reporting the same D-channel index is not something the
+// real reader can produce (the D1...D4 loop only ever emits one channel per
+// index), but the cross-check treats a duplicated index defensively: it is
+// unresolved for that offset, never resolved by picking whichever channel
+// happened to win a first-wins uniquing. Here one of the duplicate D1
+// entries would, on its own, disagree with the ordinal join (it resolves to
+// port 2's UUID) -- proving the offset is skipped entirely rather than
+// picking the agreeing or the disagreeing one.
+@Test func portManagerTreatsDuplicateSMCChannelIndexAsUnresolved() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        hpmPorts: [
+            HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C"),
+            HPMPortInput(uuid: "BBBB", portNumber: 2, portType: "USB-C"),
+        ],
+        phyData: [
+            PhyInput(phyID: 0, portNumber: 1),
+            PhyInput(phyID: 1, portNumber: 2),
+        ],
+        tbData: [
+            ThunderboltInput(socketID: 1),
+            ThunderboltInput(socketID: 2),
+        ],
+        pdReliabilityData: [
+            PDReliabilityInput(entryOffset: 0, attachCount: 3),
+            PDReliabilityInput(entryOffset: 1, attachCount: 7),
+        ],
+        smcPortPower: [
+            // Two channels both claiming D1 (index 1, offset 0): one agrees
+            // with the ordinal join (port 1), one would disagree (port 2).
+            // Duplicated, so offset 0 must be left unresolved rather than
+            // resolved either way. The DISAGREEING entry is listed first on
+            // purpose: a regression to first-wins uniquing would pick it and
+            // wrongly drop the snapshot, failing this test. With the
+            // agreeing entry first, first-wins is indistinguishable from
+            // treating the duplicate as unresolved.
+            SMCPortPowerInput(present: true, volts: 5, amps: 1, uuid: "bbbb", channel: 1),
+            SMCPortPowerInput(present: true, volts: 5, amps: 1, uuid: "aaaa", channel: 1),
+            // D2 (offset 1) is unambiguous and agrees, proving the rest of
+            // the cross-check still runs normally.
+            SMCPortPowerInput(present: true, volts: 5, amps: 1, uuid: "bbbb", channel: 2),
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    let port1 = manager.ports.first { $0.id == 1 }
+    let port2 = manager.ports.first { $0.id == 2 }
+
+    // Ordinal attribution stands unchanged on both offsets: the duplicate
+    // index at D1 was never treated as a disagreement, so nothing dropped.
+    #expect(port1?.pdReliability?.attachCount == 3)
+    #expect(port2?.pdReliability?.attachCount == 7)
+}
+
+// The ordinal join can produce no entry for an offset (e.g. a missing PD
+// reliability entry at that offset) while still consuming the usbCPortIDs
+// roster positionally elsewhere. A keyed channel that resolves at that
+// unattributed offset must never be reported as a disagreement -- there is
+// no ordinal attribution there to disagree with. Two PDReliabilityInput
+// entries both stamped with entryOffset 1 satisfy the ordinal join's count
+// gate (2 entries == 2 USB-C ports) while colliding in its offset dictionary
+// (first-wins), leaving offset 0 with no ordinal entry -- the only way to
+// reach this state through the public applySnapshot path, since reader
+// offsets are otherwise always contiguous.
+@Test func portManagerIgnoresKeyedDisagreementOnOffsetOrdinalJoinSkipped() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        hpmPorts: [
+            HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C"),
+            HPMPortInput(uuid: "BBBB", portNumber: 2, portType: "USB-C"),
+        ],
+        phyData: [
+            PhyInput(phyID: 0, portNumber: 1),
+            PhyInput(phyID: 1, portNumber: 2),
+        ],
+        tbData: [
+            ThunderboltInput(socketID: 1),
+            ThunderboltInput(socketID: 2),
+        ],
+        pdReliabilityData: [
+            // Both entries claim offset 1: the ordinal join's byOffset
+            // dictionary keeps the first and drops the second, so offset 0
+            // never gets attributed to port 1 at all.
+            PDReliabilityInput(entryOffset: 1, attachCount: 7),
+            PDReliabilityInput(entryOffset: 1, attachCount: 99),
+        ],
+        smcPortPower: [
+            // D1 (offset 0) resolves to port 2's UUID, which would disagree
+            // with the ordinal port at offset 0 (port 1) if the ordinal join
+            // had attributed anything there. It didn't, so this must be
+            // ignored rather than dropping the whole snapshot.
+            SMCPortPowerInput(present: true, volts: 5, amps: 1, uuid: "bbbb", channel: 1),
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    let port1 = manager.ports.first { $0.id == 1 }
+    let port2 = manager.ports.first { $0.id == 2 }
+
+    // Port 2 keeps its ordinal attribution: nothing was dropped.
+    #expect(port2?.pdReliability?.attachCount == 7)
+    #expect(port1?.pdReliability == nil)
+}

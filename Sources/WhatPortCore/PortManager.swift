@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let portManagerLog = Logger(subsystem: "app.whatport.whatport", category: "PortManager")
 
 // PortManager is the central domain object. It holds the current state of all
 // ports and updates when new IOKit snapshots arrive.
@@ -42,6 +45,15 @@ public final class PortManager: @unchecked Sendable {
     // "connected" (or simply idle): there is no tracked phase for it.
     public private(set) var lifecyclePhases: [Int: PortLifecyclePhase] = [:]
     private var lifecycleMachine = PortLifecycleStateMachine()
+
+    // Signatures of PD reliability keyed-cross-check disagreements already
+    // logged this session (see crossCheckPDJoin). correlate() runs every
+    // poll (1s), so without this a persistent disagreement would log the
+    // same error forever. Never cleared on agreement: the intent is once
+    // per distinct signature per session, not once per streak. The
+    // fail-closed drop of PD attribution still happens on every snapshot
+    // regardless of whether the disagreement gets logged.
+    private var loggedPDDisagreements: Set<String> = []
 
     // 60 samples at the 1s poll interval = the 60s window the sparkline labels.
     private let maxPowerSamples = 60
@@ -448,14 +460,21 @@ public struct SMCPortPowerInput: Sendable {
     public let volts: Double
     public let amps: Double
     public let uuid: String   // 32-char lowercase hex (normalised)
+    // SMC D-channel index (1..4). Not the physical port number (see
+    // SMCPowerReader); used only as the keyed cross-check's join key
+    // (PortControllerInfo entry offset j <-> D-channel j+1), never for power
+    // attribution, which stays keyed on `uuid`. Defaults to 0 (no channel)
+    // for callers that predate the cross-check.
+    public let channel: Int
 
     public var watts: Double { volts * amps }
 
-    public init(present: Bool, volts: Double, amps: Double, uuid: String) {
+    public init(present: Bool, volts: Double, amps: Double, uuid: String, channel: Int = 0) {
         self.present = present
         self.volts = volts
         self.amps = amps
         self.uuid = uuid
+        self.channel = channel
     }
 }
 
@@ -1081,10 +1100,43 @@ extension PortManager {
         // controller entry, 0 exceptions across the corpus. So this fails
         // closed on any other count: no best-effort attribution, nothing
         // attaches to any port.
-        let pdReliabilityByPortID = Self.joinPDReliabilityOrdinally(
-            pdReliabilityData,
-            usbCPortIDs: results.filter { $0.portType == .usbC }.map(\.id).sorted()
+        //
+        // Cross-checked (DAR-324) against a second, keyed route wherever
+        // that route resolves: PortControllerInfo entry offset j corresponds
+        // to SMC D-channel index j+1, and that channel's DxUI equals the
+        // port controller's own UUID, an identification of the physical
+        // port that never depends on array order. On the corpus machines
+        // where the whole chain resolves (PortControllerInfo + SMC
+        // D-channel UUIDs + HPM roster) -- 495/501 candidate machines as of
+        // this writing, a larger sample than the 97 an earlier, smaller
+        // corpus snapshot found -- the keyed route agrees with the ordinal
+        // one every time, zero violations, and the MagSafe controller never
+        // publishes a D-channel, so it can never masquerade as a USB-C
+        // offset. See PDReliabilityCorpusSweepTests for the replay. Where
+        // the chain does not resolve for an offset (no SMC channel at that
+        // index, no UUID, no unambiguous port match), that offset is simply
+        // unchecked and the ordinal rule stands. Where it resolves and
+        // disagrees on any offset, the whole snapshot's PD attribution is
+        // dropped, fail closed like the count gate above, and logged once.
+        let usbCPortIDsForPD = results.filter { $0.portType == .usbC }.map(\.id).sorted()
+        let pdReliabilityCrossCheck = Self.crossCheckPDJoin(
+            ordinal: Self.joinPDReliabilityOrdinally(pdReliabilityData, usbCPortIDs: usbCPortIDsForPD),
+            usbCPortIDs: usbCPortIDsForPD,
+            smcChannels: smcPortPower,
+            usbCPorts: results
         )
+        if let disagreement = pdReliabilityCrossCheck.disagreement {
+            // Log each distinct disagreement signature once per session, not
+            // once per poll: a persistent disagreement would otherwise log
+            // every 1s forever. The drop above already happened regardless.
+            if !loggedPDDisagreements.contains(disagreement) {
+                portManagerLog.error(
+                    "PD reliability keyed cross-check disagreed with the ordinal join; dropping PD attribution for this snapshot: \(disagreement, privacy: .public)"
+                )
+                loggedPDDisagreements.insert(disagreement)
+            }
+        }
+        let pdReliabilityByPortID = pdReliabilityCrossCheck.result
         let ccByPortFull = Dictionary(
             usbCCC.map { ($0.portNumber, $0) },
             uniquingKeysWith: { a, _ in a }
@@ -1248,6 +1300,75 @@ extension PortManager {
             result[portID] = entry
         }
         return result
+    }
+
+    // Outcome of crossCheckPDJoin. `result` is what correlate() must use for
+    // PD attribution; `disagreement` is non-nil only when a disagreement
+    // dropped the whole snapshot's attribution, and is exactly the context
+    // the one log line at the call site needs (no PII: offsets, D-indices,
+    // and port numbers only).
+    private struct PDReliabilityCrossCheckResult {
+        let result: [Int: PDReliabilityInput]
+        let disagreement: String?
+    }
+
+    // The keyed cross-check described at the call site: for each USB-C
+    // offset the ordinal join actually attributed an entry to (never a
+    // positional lookup against usbCPortIDs alone), the keyed candidate is
+    // the SMC channel whose D-index is offset + 1. A channel resolves to a
+    // port only when its DxUI matches exactly one USB-C port's normalised
+    // HPM UUID; zero or multiple matches are treated as unresolved (no
+    // evidence either way), never as a disagreement -- ambiguity says
+    // nothing about whether the ordinal join is right. Any offset where a
+    // resolved keyed port differs from the ordinal port drops the whole
+    // mapping.
+    private static func crossCheckPDJoin(
+        ordinal: [Int: PDReliabilityInput],
+        usbCPortIDs: [Int],
+        smcChannels: [SMCPortPowerInput],
+        usbCPorts: [PortState]
+    ) -> PDReliabilityCrossCheckResult {
+        guard !ordinal.isEmpty, !smcChannels.isEmpty else {
+            return PDReliabilityCrossCheckResult(result: ordinal, disagreement: nil)
+        }
+
+        // Normalised HPM UUID -> port IDs, USB-C ports only, so a MagSafe
+        // port's UUID (or a USB-C port outside the ordinal roster) can never
+        // satisfy a match. Kept as an array per UUID so two ports sharing a
+        // UUID reads as ambiguous rather than silently picking one.
+        var portIDsByUUID: [String: [Int]] = [:]
+        for port in usbCPorts where port.portType == .usbC {
+            guard let uuid = port.uuid else { continue }
+            portIDsByUUID[SMCContractAttribution.normalisedUUID(uuid), default: []].append(port.id)
+        }
+
+        // Grouped by D-channel index rather than first-wins uniqued: the real
+        // reader (the D1...D4 loop) can never publish two channels at the
+        // same index, but defensively, an index with more than one entry is
+        // treated as unresolved for that offset, never resolved by picking
+        // whichever happened to win the uniquing.
+        let channelsByIndex = Dictionary(grouping: smcChannels, by: \.channel)
+            .compactMapValues { channels in channels.count == 1 ? channels[0] : nil }
+
+        var disagreements: [String] = []
+        for (offset, ordinalPortID) in usbCPortIDs.enumerated() {
+            // The ordinal join produced nothing for this offset (e.g. a
+            // missing PD reliability entry): there is no attribution to
+            // cross-check, so a keyed match here can never count as a
+            // disagreement about it.
+            guard ordinal[ordinalPortID] != nil else { continue }
+            let channelIndex = offset + 1
+            guard let channel = channelsByIndex[channelIndex] else { continue }   // unresolved: no channel, or a duplicate index
+            guard let matches = portIDsByUUID[channel.uuid], matches.count == 1 else { continue }   // unresolved: no/ambiguous match
+            let keyedPortID = matches[0]
+            guard keyedPortID != ordinalPortID else { continue }   // agrees
+            disagreements.append("offset \(offset) D\(channelIndex): keyed=port \(keyedPortID) ordinal=port \(ordinalPortID)")
+        }
+
+        guard disagreements.isEmpty else {
+            return PDReliabilityCrossCheckResult(result: [:], disagreement: disagreements.joined(separator: "; "))
+        }
+        return PDReliabilityCrossCheckResult(result: ordinal, disagreement: nil)
     }
 
     // Build LiveTransport entries for a port from the transport state services.
