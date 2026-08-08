@@ -53,6 +53,7 @@ The live view tells you what your ports are doing right now. The **Flight Record
 - **Event timeline.** Every plug, unplug, protocol change, and power event over time, filterable by port and event kind.
 - **Power graphs.** Power draw for every port across a selectable time range, with disk-backed history so it survives a restart.
 - **Port health scoring.** Each port scored by how often faults recur, with a clear "not a hardware diagnosis" note. Reset the baseline once you've dealt with something.
+- **PD reliability counters.** The port controller's own lifetime fault counts (hard resets, role-swap failures, short detections, bus errors) folded into each port's health score. Only faults that happen while WhatPort is watching count against you.
 - **Alerts.** Get notified on overcurrent, link error, disconnect, or protocol downgrade.
 - **Sessions.** Bookmark a stretch of recording, name it, and export it to JSON or CSV.
 - **Survives an overnight kill.** With Launch at Login on, it restarts itself within seconds if macOS stops it to free memory. A deliberate Quit still quits.
