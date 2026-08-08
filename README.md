@@ -24,7 +24,7 @@ Free and open source. Apple Silicon only (M1 and later).
 - **Display detail** with link rate (HBR2/HBR3), lanes in use, native versus Thunderbolt-tunnelled, connected display count, and any hub or HDMI converter in the chain
 - **Power monitoring** with real-time wattage, voltage, current, and a 60-second rolling graph
 - **Charging status** that says why a connected charger isn't charging: charging, fully charged, held to protect battery health, or just not charging
-- **Device and dock identification** including product name, vendor, serial number, USB version, and the connected Thunderbolt dock's own name
+- **Device and dock identification** including product name, vendor, serial number, USB version, and the connected Thunderbolt dock's own name. Behind a hub or dock, the row names the device you actually plugged in, not the hub, and the detail card counts the rest
 - **Charger identification** naming the adapter and listing its full advertised power menu
 - **Cable info** showing cable type and USB PD revision
 - **Liquid detection** flagging a wet port (M3 and later)
@@ -49,6 +49,7 @@ The live view tells you what your ports are doing right now. The **Flight Record
   <img src="screenshots/flight-recorder-alerts.png" width="420" alt="Flight Recorder alert rules for overcurrent, link errors, and disconnects">
 </p>
 
+- **Device tree per port.** Every USB device behind the port: what's plugged into the dock, what's behind the hub inside it, and which hub or dock each device arrived through. Hubs sit behind a toggle so the devices lead.
 - **Event timeline.** Every plug, unplug, protocol change, and power event over time, filterable by port and event kind.
 - **Power graphs.** Power draw for every port across a selectable time range, with disk-backed history so it survives a restart.
 - **Port health scoring.** Each port scored by how often faults recur, with a clear "not a hardware diagnosis" note. Reset the baseline once you've dealt with something.
