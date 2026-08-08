@@ -374,6 +374,154 @@ enum ProbeCorpus {
         return nil
     }
 
+    // MARK: - Probe 01: IOPortTransportStateCC / SOP' blocks
+
+    // Same "=== ClassName[N] ===" + "Key = value" format accessoryBlocks
+    // walks (see properties(from:)), just filtered to a different class. The
+    // preamble lines ("Class:", "Name:", "Properties:") carry no " = " so
+    // properties(from:) already skips them on its own; nothing extra is
+    // needed to isolate the fields inside.
+    static func equalsBlocks(in output: String, headerContains: String) -> [[String: Any]] {
+        var blocks: [[String: Any]] = []
+        var inBlock = false
+        var propertyLines: [String] = []
+
+        func finish() {
+            guard inBlock, !propertyLines.isEmpty else { return }
+            blocks.append(properties(from: propertyLines))
+        }
+
+        for line in output.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+            if line.hasPrefix("=== ") {
+                finish()
+                inBlock = line.contains(headerContains)
+                propertyLines = []
+                continue
+            }
+            if inBlock { propertyLines.append(line) }
+        }
+        finish()
+
+        return blocks
+    }
+
+    // Each entry is one IOPortTransportStateCC service's own properties
+    // (ParentBuiltInPortNumber, ParentPortTypeDescription, Active, ...).
+    static func ccBlocks(in output: String) -> [[String: Any]] {
+        equalsBlocks(in: output, headerContains: "IOPortTransportStateCC[")
+    }
+
+    // Each entry is one SOP' cable-plug service's own properties
+    // (ComponentName, Metadata, Specification Revision, ...), the sibling of
+    // the CC blocks above rather than a child inside them: probe 01 dumps
+    // both kinds of service as flat top-level blocks.
+    static func sopPrimeBlocks(in output: String) -> [[String: Any]] {
+        equalsBlocks(in: output, headerContains: "IOPortTransportComponentCCUSBPDSOPp[")
+    }
+
+    // MARK: - Probe 17: colon-syntax property dump ("--- ClassName[N] ---" + "Key: value")
+
+    // The same kind of block probe 01/29 dump, but rendered with "Key: value"
+    // syntax (colon-space) instead of "Key = value". Kept as a separate
+    // function rather than adding a separator parameter to properties(from:):
+    // the two probes are different capture tools with different rendering,
+    // and guessing per-line which separator applies is exactly the kind of
+    // format-sniffing that has silently dropped data before (see
+    // properties(from:)'s CFBasicHash note above).
+    static func colonProperties(from lines: [String]) -> [String: Any] {
+        var result: [String: Any] = [:]
+        var index = 0
+
+        while index < lines.count {
+            let line = lines[index]
+            index += 1
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard let colon = trimmed.range(of: ": ") else { continue }
+
+            let key = String(trimmed[trimmed.startIndex..<colon.lowerBound])
+            let value = String(trimmed[colon.upperBound...])
+
+            if value == "{" {
+                var nested: [String] = []
+                var depth = 1
+                while index < lines.count {
+                    let inner = lines[index]
+                    index += 1
+                    depth += braceDelta(in: inner)
+                    if depth <= 0 { break }
+                    nested.append(inner)
+                }
+                result[key] = colonProperties(from: nested)
+                continue
+            }
+
+            if value == "[" {
+                var items: [String] = []
+                while index < lines.count {
+                    let itemLine = lines[index].trimmingCharacters(in: .whitespaces)
+                    index += 1
+                    if itemLine == "]" { break }
+                    guard let close = itemLine.firstIndex(of: "]") else { continue }
+                    let item = itemLine[itemLine.index(after: close)...]
+                        .trimmingCharacters(in: .whitespaces)
+                    items.append(unquote(item))
+                }
+                result[key] = items
+                continue
+            }
+
+            result[key] = scalar(value)
+        }
+
+        return result
+    }
+
+    // Blocks headed '--- ClassName[N] ---' (as opposed to probe 01/29's
+    // "=== ClassName[N] ==="), with colon-syntax fields.
+    static func colonBlocks(in output: String, matching headerContains: String) -> [[String: Any]] {
+        var blocks: [[String: Any]] = []
+        var inBlock = false
+        var propertyLines: [String] = []
+
+        func finish() {
+            guard inBlock, !propertyLines.isEmpty else { return }
+            blocks.append(colonProperties(from: propertyLines))
+        }
+
+        for line in output.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+            if line.hasPrefix("--- ") || line.hasPrefix("=== ") {
+                finish()
+                inBlock = line.contains(headerContains)
+                propertyLines = []
+                continue
+            }
+            if inBlock { propertyLines.append(line) }
+        }
+        finish()
+
+        return blocks
+    }
+
+    // Each entry is one IOPortFeaturePowerSource service's own properties
+    // (PowerSourceName, ParentBuiltInPortNumber, WinningPowerSourceOption,
+    // ...), the node ChargerReader.parse reads. Guards the same 64KB pipe
+    // truncation isolatedSmartBatterySection guards for probe 32: 41 of the
+    // corpus's probe-17 captures are cut off mid-dump, and a truncated
+    // capture must be dropped outright rather than silently under-report a
+    // machine's charger nodes.
+    static func chargerBlocks(inFullOutput output: String) -> [[String: Any]] {
+        guard !isPipeTruncated(output) else { return [] }
+        return colonBlocks(in: output, matching: "IOPortFeaturePowerSource[")
+    }
+
+    // True when a capture was cut off mid-dump by the 64KB pipe buffer. The
+    // cap is a BYTE limit, not a grapheme-cluster count, so this compares
+    // output.utf8.count, not output.count (matches isolatedSmartBatterySection's
+    // own check for probe 32).
+    static func isPipeTruncated(_ output: String) -> Bool {
+        output.utf8.count == 65536
+    }
+
     // MARK: - Probe 34: raw SMC key bytes
 
     // Lines are "  D1UI hex_ 16    raw=0011..", with "(read failed 0x...)" where
@@ -450,6 +598,137 @@ enum ProbeCorpus {
         guard output.utf8.count != 65536 else { return nil }
         guard let managerRange = output.range(of: "AppleSmartBatteryManager") else { return output }
         return String(output[output.startIndex..<managerRange.lowerBound])
+    }
+
+    // MARK: - Probe 32: full property dump (IsCharging / PowerTelemetryData / AdapterDetails)
+
+    // Turns an already-isolated probe-32 AppleSmartBattery section into the
+    // dictionary shape ioProperties() would hand PowerReader: scalars, plus
+    // nested dictionaries for "Key =     Dict[N]:" values (arrays fold to
+    // [Any], each item parsed the same way when it is itself a dict).
+    //
+    // Unlike properties(from:) (probes 01/29's "= {" / "= [" bracket syntax)
+    // or colonProperties(from:) (probe 17's "Key: value"), this probe nests by
+    // INDENTATION: a container's fields sit some fixed number of spaces
+    // deeper than the "Key =     Dict[N]:" / "Array[N]:" line introducing
+    // them. The child indent is measured from the first line that follows,
+    // the same defensive approach portControllerEntries takes for its entry
+    // indent, rather than assumed as a fixed number of spaces.
+    static func smartBatteryProperties(inFullOutput output: String) -> [String: Any] {
+        guard let section = isolatedSmartBatterySection(inFullOutput: output) else { return [:] }
+        return smartBatteryProperties(inSection: section)
+    }
+
+    static func smartBatteryProperties(inSection section: String) -> [String: Any] {
+        let lines = section.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        guard let headerIndex = lines.firstIndex(where: {
+            $0.contains("AppleSmartBattery (full property dump)")
+        }) else { return [:] }
+
+        guard let indent = nextNonBlankIndent(lines, from: headerIndex + 1) else { return [:] }
+        let (dict, _) = smartBatteryDict(lines, from: headerIndex + 1, indent: indent)
+        return dict
+    }
+
+    // The indent of the first non-blank line at or after `start`, or nil when
+    // there is none (an empty dict/array, or end of input).
+    private static func nextNonBlankIndent(_ lines: [String], from start: Int) -> Int? {
+        for line in lines[start...] {
+            if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            return leadingSpaceCount(of: line)
+        }
+        return nil
+    }
+
+    // Parses one probe-32 dict's "Key =     value" fields, starting at line
+    // `start`, all at exactly `indent` spaces. Stops (without consuming) at
+    // the first line indented less than `indent`. Returns the dict and the
+    // index of the first line not consumed, so a caller walking a sibling
+    // list of dicts (an array's items) knows where to resume.
+    private static func smartBatteryDict(
+        _ lines: [String], from start: Int, indent: Int
+    ) -> ([String: Any], Int) {
+        var result: [String: Any] = [:]
+        var index = start
+
+        while index < lines.count {
+            let line = lines[index]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { index += 1; continue }
+
+            let lineIndent = leadingSpaceCount(of: line)
+            if lineIndent < indent { break }
+            guard lineIndent == indent, let equals = trimmed.range(of: " = ") else {
+                index += 1
+                continue
+            }
+
+            let key = String(trimmed[trimmed.startIndex..<equals.lowerBound])
+            // Probe 32 column-aligns values with extra padding spaces after
+            // the "=" ("Key =     value"), unlike probe 01/29's single-space
+            // "Key = value" properties(from:) parses, so the raw " = " split
+            // above leaves leading whitespace on the value that must be
+            // trimmed before checking for "Dict[" / "Array[" or handing it
+            // to scalar().
+            let valueString = String(trimmed[equals.upperBound...]).trimmingCharacters(in: .whitespaces)
+            index += 1
+
+            if valueString.hasPrefix("Dict["), let childIndent = nextNonBlankIndent(lines, from: index),
+               childIndent > indent {
+                let (dict, next) = smartBatteryDict(lines, from: index, indent: childIndent)
+                result[key] = dict
+                index = next
+            } else if valueString.hasPrefix("Array["), let childIndent = nextNonBlankIndent(lines, from: index),
+                      childIndent > indent {
+                let (array, next) = smartBatteryArray(lines, from: index, indent: childIndent)
+                result[key] = array
+                index = next
+            } else {
+                result[key] = scalar(valueString)
+            }
+        }
+
+        return (result, index)
+    }
+
+    // Parses one probe-32 array's "[i]  value" items, the same way
+    // smartBatteryDict parses a dict's fields. An item that is itself a dict
+    // ("[i]             Dict[M]:") recurses; anything else (a scalar, or a
+    // Data[N] hex blob such as BatteryData.RaTableRaw, which nothing here
+    // reads) is kept as a single opaque line rather than parsed further.
+    private static func smartBatteryArray(
+        _ lines: [String], from start: Int, indent: Int
+    ) -> ([Any], Int) {
+        var items: [Any] = []
+        var index = start
+
+        while index < lines.count {
+            let line = lines[index]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { index += 1; continue }
+
+            let lineIndent = leadingSpaceCount(of: line)
+            if lineIndent < indent { break }
+            guard lineIndent == indent, trimmed.hasPrefix("["),
+                  let close = trimmed.firstIndex(of: "]") else {
+                index += 1
+                continue
+            }
+
+            let rest = trimmed[trimmed.index(after: close)...].trimmingCharacters(in: .whitespaces)
+            index += 1
+
+            if rest.hasPrefix("Dict["), let childIndent = nextNonBlankIndent(lines, from: index),
+               childIndent > indent {
+                let (dict, next) = smartBatteryDict(lines, from: index, indent: childIndent)
+                items.append(dict)
+                index = next
+            } else {
+                items.append(scalar(rest))
+            }
+        }
+
+        return (items, index)
     }
 
     // Parses a whole probe-32 capture's PortControllerInfo array, applying

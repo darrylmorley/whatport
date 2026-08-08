@@ -24,19 +24,9 @@ public struct RawCCData: Sendable {
 public enum CCReader {
     public static func readAll() -> [RawCCData] {
         var results: [RawCCData] = []
-        // Dedup key: (portNumber, portType) since different types share numbers
-        var seen = Set<String>()
 
         withMatchingServices(className: "IOPortTransportStateCC") { service in
             guard let props = ioProperties(service) else { return }
-
-            let portNumber = ioInt(props["ParentBuiltInPortNumber"])
-            let portType = ioString(props["ParentPortTypeDescription"])
-            let active = ioBool(props["Active"])
-
-            let key = "\(portNumber):\(portType)"
-            guard portNumber > 0, !seen.contains(key) else { return }
-            seen.insert(key)
 
             // Read cable identity from SOP' child service.
             // SOP' represents the cable plug. Its Metadata dict has
@@ -44,16 +34,65 @@ public enum CCReader {
             // Specification Revision (USB PD rev).
             let cable = readCableIdentity(ccService: service)
 
-            results.append(RawCCData(
-                portNumber: portNumber,
-                portType: portType,
-                active: active,
+            guard let entry = parse(
+                properties: props,
                 cableProductType: cable.productType,
                 cablePDRevision: cable.pdRevision
-            ))
+            ) else { return }
+            results.append(entry)
         }
 
-        return results.sorted { $0.portNumber < $1.portNumber }
+        return dedupedAndSorted(results)
+    }
+
+    // The dedup/ordering rule, given the raw entries the registry walk (or a
+    // replay builder) produced. Split out from readAll so a replayed
+    // snapshot goes through exactly the same collapsing production does,
+    // rather than the replay being able to construct a shape (two entries
+    // for one port/type pair, or unsorted) production's registry walk could
+    // never hand to the domain layer.
+    //
+    // Dedup key is (portNumber, portType): different port types can share
+    // the same built-in port number (e.g. MagSafe and USB-C port 1 both
+    // report ParentBuiltInPortNumber = 1). The first entry for a given key
+    // wins, matching the registry walk's own first-match-wins order.
+    static func dedupedAndSorted(_ entries: [RawCCData]) -> [RawCCData] {
+        var seen = Set<String>()
+        var deduped: [RawCCData] = []
+        deduped.reserveCapacity(entries.count)
+
+        for entry in entries {
+            guard entry.portNumber > 0 else { continue }
+            let key = "\(entry.portNumber):\(entry.portType)"
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            deduped.append(entry)
+        }
+
+        return deduped.sorted { $0.portNumber < $1.portNumber }
+    }
+
+    // The port rules, given one service's properties plus the cable identity
+    // the child walk found (or empty, when there is no cable / no SOP' child).
+    // Split out from the registry walk so recorded properties from other Macs
+    // can be replayed through it.
+    //
+    // Returns nil for a service with no usable port number.
+    static func parse(
+        properties: [String: Any],
+        cableProductType: String,
+        cablePDRevision: Int
+    ) -> RawCCData? {
+        let portNumber = ioInt(properties["ParentBuiltInPortNumber"])
+        guard portNumber > 0 else { return nil }
+
+        return RawCCData(
+            portNumber: portNumber,
+            portType: ioString(properties["ParentPortTypeDescription"]),
+            active: ioBool(properties["Active"]),
+            cableProductType: cableProductType,
+            cablePDRevision: cablePDRevision
+        )
     }
 
     // Walk child services of a CC entry looking for SOP' (cable identity).
@@ -89,19 +128,30 @@ public enum CCReader {
         while case let child = IOIteratorNext(iter), child != 0 {
             defer { IOObjectRelease(child) }
             guard let childProps = ioProperties(child) else { continue }
-
-            let componentName = ioString(childProps["ComponentName"])
-            guard componentName == "SOP'" else { continue }
-
-            let metadata = ioDictionary(childProps["Metadata"])
-            let productType = ioString(metadata["Product Type Description"])
-            let pdRevision = ioInt(childProps["Specification Revision"])
-
-            if !productType.isEmpty {
-                return [(productType, pdRevision)]
-            }
+            guard let identity = cableIdentity(fromSOPProperties: childProps) else { continue }
+            return [identity]
         }
 
         return []
+    }
+
+    // The cable-identity rule, given one SOP' child's properties. Split out
+    // from the registry walk so recorded properties from other Macs can be
+    // replayed through it, same as parse(properties:cableProductType:
+    // cablePDRevision:) above.
+    //
+    // Returns nil for a child that is not the SOP' cable-plug service, or
+    // that carries no product type.
+    static func cableIdentity(
+        fromSOPProperties properties: [String: Any]
+    ) -> (productType: String, pdRevision: Int)? {
+        let componentName = ioString(properties["ComponentName"])
+        guard componentName == "SOP'" else { return nil }
+
+        let metadata = ioDictionary(properties["Metadata"])
+        let productType = ioString(metadata["Product Type Description"])
+        guard !productType.isEmpty else { return nil }
+
+        return (productType, ioInt(properties["Specification Revision"]))
     }
 }

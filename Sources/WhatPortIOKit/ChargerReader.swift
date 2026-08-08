@@ -47,46 +47,56 @@ public enum ChargerReader {
 
         withMatchingServices(className: "IOPortFeaturePowerSource") { service in
             guard let props = ioProperties(service) else { return }
-
-            // Only read USB-PD sources (skip Brick ID, TypeC fallback, etc.)
-            let name = ioString(props["PowerSourceName"])
-            guard name == "USB-PD" else { return }
-
-            let portType = ioString(props["ParentPortTypeDescription"])
-            let portNumber = ioInt(props["ParentBuiltInPortNumber"])
-
-            // Try WinningPowerSourceOption first (the PDO the system selected).
-            // USB-C ports have this, MagSafe does not always.
-            var pdo = ioDictionary(props["WinningPowerSourceOption"])
-            let hasWinningContract = !pdo.isEmpty
-
-            // Fallback: pick the highest-power PDO from PowerSourceOptions.
-            // MagSafe exposes the array of available PDOs but not which one
-            // was selected, so we take the max-wattage entry as the best
-            // approximation of the negotiated contract.
-            if pdo.isEmpty {
-                pdo = highestPDO(from: ioArray(props["PowerSourceOptions"]))
-            }
-
-            let maxWatts = ioInt(pdo["Max Power (mW)"])
-
-            // A node with no usable PDO is still reported, with maxWatts 0.
-            // Callers that attribute power filter on maxWatts > 0; the reason
-            // this entry exists at all is that "macOS published a node here"
-            // and "macOS published nothing here" are different facts, and the
-            // SMC contract fallback (which only fires when macOS published
-            // nothing) cannot tell them apart otherwise.
-            results.append(RawChargerData(
-                portType: portType,
-                portNumber: portNumber,
-                maxWatts: maxWatts,
-                voltage: ioInt(pdo["Voltage (mV)"]),
-                maxCurrent: ioInt(pdo["Max Current (mA)"]),
-                hasWinningContract: hasWinningContract && maxWatts > 0
-            ))
+            guard let data = parse(properties: props) else { return }
+            results.append(data)
         }
 
         return results
+    }
+
+    // The node rules, given one service's properties. Split out from the
+    // registry walk so recorded properties from other Macs can be replayed
+    // through it.
+    //
+    // Returns nil for a node that is not a USB-PD power source (Brick ID,
+    // TypeC fallback, etc.)
+    static func parse(properties: [String: Any]) -> RawChargerData? {
+        // Only read USB-PD sources (skip Brick ID, TypeC fallback, etc.)
+        let name = ioString(properties["PowerSourceName"])
+        guard name == "USB-PD" else { return nil }
+
+        let portType = ioString(properties["ParentPortTypeDescription"])
+        let portNumber = ioInt(properties["ParentBuiltInPortNumber"])
+
+        // Try WinningPowerSourceOption first (the PDO the system selected).
+        // USB-C ports have this, MagSafe does not always.
+        var pdo = ioDictionary(properties["WinningPowerSourceOption"])
+        let hasWinningContract = !pdo.isEmpty
+
+        // Fallback: pick the highest-power PDO from PowerSourceOptions.
+        // MagSafe exposes the array of available PDOs but not which one
+        // was selected, so we take the max-wattage entry as the best
+        // approximation of the negotiated contract.
+        if pdo.isEmpty {
+            pdo = highestPDO(from: ioArray(properties["PowerSourceOptions"]))
+        }
+
+        let maxWatts = ioInt(pdo["Max Power (mW)"])
+
+        // A node with no usable PDO is still reported, with maxWatts 0.
+        // Callers that attribute power filter on maxWatts > 0; the reason
+        // this entry exists at all is that "macOS published a node here"
+        // and "macOS published nothing here" are different facts, and the
+        // SMC contract fallback (which only fires when macOS published
+        // nothing) cannot tell them apart otherwise.
+        return RawChargerData(
+            portType: portType,
+            portNumber: portNumber,
+            maxWatts: maxWatts,
+            voltage: ioInt(pdo["Voltage (mV)"]),
+            maxCurrent: ioInt(pdo["Max Current (mA)"]),
+            hasWinningContract: hasWinningContract && maxWatts > 0
+        )
     }
 
     // Finds the PDO with the highest Max Power from an array of option dicts.

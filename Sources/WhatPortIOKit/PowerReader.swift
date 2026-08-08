@@ -108,35 +108,47 @@ public enum PowerReader {
 
         withMatchingServices(className: "AppleSmartBattery") { service in
             guard let props = ioProperties(service) else { return }
-
-            let isCharging = ioBool(props["IsCharging"])
-            let fullyCharged = ioBool(props["FullyCharged"])
-            let externalConnected = ioBool(props["ExternalConnected"])
-
-            // No charger connected at all, nothing to report
-            guard externalConnected else { return }
-
-            let telemetry = ioDictionary(props["PowerTelemetryData"])
-            let powerIn = ioInt(telemetry["SystemPowerIn"])
-
-            // NotChargingReason lives in the ChargerData dict, falling back to the
-            // top level on machines that expose it there.
-            let chargerData = ioDictionary(props["ChargerData"])
-            let notChargingReason = chargerData["NotChargingReason"] != nil
-                ? ioInt(chargerData["NotChargingReason"])
-                : ioInt(props["NotChargingReason"])
-
-            result = RawChargingPower(
-                systemPowerIn: powerIn,
-                systemVoltageIn: ioInt(telemetry["SystemVoltageIn"]),
-                systemCurrentIn: ioInt(telemetry["SystemCurrentIn"]),
-                isCharging: isCharging,
-                fullyCharged: fullyCharged,
-                notChargingReason: notChargingReason
-            )
+            // Only overwrite `result` on a successful parse. AppleSmartBattery
+            // is a single service instance in practice, but the callback still
+            // runs once per matching service; if a later match parsed to nil
+            // it must not clobber a valid result an earlier match produced.
+            if let parsed = parseChargingPower(properties: props) { result = parsed }
         }
 
         return result
+    }
+
+    // The charging-power rules, given one service's properties. Split out from
+    // the registry walk so recorded properties from other Macs can be replayed
+    // through it.
+    //
+    // Returns nil when no charger is connected at all.
+    static func parseChargingPower(properties: [String: Any]) -> RawChargingPower? {
+        let isCharging = ioBool(properties["IsCharging"])
+        let fullyCharged = ioBool(properties["FullyCharged"])
+        let externalConnected = ioBool(properties["ExternalConnected"])
+
+        // No charger connected at all, nothing to report
+        guard externalConnected else { return nil }
+
+        let telemetry = ioDictionary(properties["PowerTelemetryData"])
+        let powerIn = ioInt(telemetry["SystemPowerIn"])
+
+        // NotChargingReason lives in the ChargerData dict, falling back to the
+        // top level on machines that expose it there.
+        let chargerData = ioDictionary(properties["ChargerData"])
+        let notChargingReason = chargerData["NotChargingReason"] != nil
+            ? ioInt(chargerData["NotChargingReason"])
+            : ioInt(properties["NotChargingReason"])
+
+        return RawChargingPower(
+            systemPowerIn: powerIn,
+            systemVoltageIn: ioInt(telemetry["SystemVoltageIn"]),
+            systemCurrentIn: ioInt(telemetry["SystemCurrentIn"]),
+            isCharging: isCharging,
+            fullyCharged: fullyCharged,
+            notChargingReason: notChargingReason
+        )
     }
 
     // Read the active charger's identity and advertised power menu from
@@ -147,40 +159,52 @@ public enum PowerReader {
 
         withMatchingServices(className: "AppleSmartBattery") { service in
             guard let props = ioProperties(service) else { return }
-            guard ioBool(props["ExternalConnected"]) else { return }
-
-            let adapter = ioDictionary(props["AdapterDetails"])
-            guard !adapter.isEmpty else { return }
-
-            let name = ioString(adapter["Name"])
-            let description = ioString(adapter["Description"])
-            let manufacturer = ioString(adapter["Manufacturer"])
-            let watts = ioInt(adapter["Watts"])
-
-            var pdos: [RawChargerPDO] = []
-            for entry in ioArray(adapter["UsbHvcMenu"]) {
-                let dict = ioDictionary(entry)
-                let voltageMV = ioInt(dict["MaxVoltage"])
-                let currentMA = ioInt(dict["MaxCurrent"])
-                // Skip non-fixed-supply or malformed entries (zero current would
-                // otherwise produce a 0 W PDO and a wattless menu summary).
-                guard voltageMV > 0, currentMA > 0 else { continue }
-                pdos.append(RawChargerPDO(voltageMV: voltageMV, currentMA: currentMA))
-            }
-
-            // Nothing worth surfacing if we have neither a name nor a menu.
-            guard !name.isEmpty || !description.isEmpty || !pdos.isEmpty else { return }
-
-            result = RawChargerIdentity(
-                name: name,
-                manufacturer: manufacturer,
-                description: description,
-                maxWatts: watts,
-                pdos: pdos
-            )
+            // Same rule as readChargingPower above: a nil parse from a later
+            // matching service must never overwrite a valid earlier result.
+            if let parsed = parseChargerIdentity(properties: props) { result = parsed }
         }
 
         return result
+    }
+
+    // The charger-identity rules, given one service's properties. Split out
+    // from the registry walk so recorded properties from other Macs can be
+    // replayed through it.
+    //
+    // Returns nil when no charger is connected, or when AdapterDetails carries
+    // neither a name/description nor a usable power menu.
+    static func parseChargerIdentity(properties: [String: Any]) -> RawChargerIdentity? {
+        guard ioBool(properties["ExternalConnected"]) else { return nil }
+
+        let adapter = ioDictionary(properties["AdapterDetails"])
+        guard !adapter.isEmpty else { return nil }
+
+        let name = ioString(adapter["Name"])
+        let description = ioString(adapter["Description"])
+        let manufacturer = ioString(adapter["Manufacturer"])
+        let watts = ioInt(adapter["Watts"])
+
+        var pdos: [RawChargerPDO] = []
+        for entry in ioArray(adapter["UsbHvcMenu"]) {
+            let dict = ioDictionary(entry)
+            let voltageMV = ioInt(dict["MaxVoltage"])
+            let currentMA = ioInt(dict["MaxCurrent"])
+            // Skip non-fixed-supply or malformed entries (zero current would
+            // otherwise produce a 0 W PDO and a wattless menu summary).
+            guard voltageMV > 0, currentMA > 0 else { continue }
+            pdos.append(RawChargerPDO(voltageMV: voltageMV, currentMA: currentMA))
+        }
+
+        // Nothing worth surfacing if we have neither a name nor a menu.
+        guard !name.isEmpty || !description.isEmpty || !pdos.isEmpty else { return nil }
+
+        return RawChargerIdentity(
+            name: name,
+            manufacturer: manufacturer,
+            description: description,
+            maxWatts: watts,
+            pdos: pdos
+        )
     }
 
     // Check whether PowerOutDetails is available on this machine.
