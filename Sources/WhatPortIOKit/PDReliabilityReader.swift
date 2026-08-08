@@ -24,6 +24,16 @@ import IOKit
 // USB-C contract, not join errors) -- 0 violations of that count invariant
 // across the whole corpus.
 //
+// Provenance (apple-oss-distributions/PowerManagement, AppleSmartBattery.cpp,
+// checked 2026-08-08): each entry is populated from the SMC's per-port
+// telemetry structs (PwrPortTelemetryLogParams0/1/2_t) in the SMC's own
+// wired-port index order -- the same index space as the SMC D-channels the
+// cross-check in PortManager uses -- with each field gated by a per-field
+// validity mask, which is why some macOS builds publish a reduced key set
+// and why every field here parses tolerantly. The population code sets no
+// port-identifier field; the assembly loop and key headers are stripped
+// from the open-source drop.
+//
 // The actual join (matching offsets to the machine's USB-C port roster, and
 // failing closed on any other entry count) happens in PortManager.correlate,
 // not here: this reader has no view of the port roster, only the raw array.

@@ -75,10 +75,68 @@ struct AcknowledgedCountersCodableTests {
             pdRoleSwapFailCount: 7,
             pdI2cErrorCount: 8,
             pdAttachCount: 9,
-            pdDetachCount: 10
+            pdDetachCount: 10,
+            pdBaselined: true
         )
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(AcknowledgedCounters.self, from: data)
         #expect(decoded == original)
+        #expect(decoded.pdBaselined == true)
+    }
+
+    @Test("A payload saved before the pdBaselined marker existed, but carrying PD keys, decodes as baselined")
+    func decodingPreMarkerPayloadWithPDKeysDecodesBaselined() throws {
+        // Shape persisted between the attach/detach fields landing (DAR-289
+        // ship) and the pdBaselined marker landing after them (this fix).
+        // The marker field did not exist in that build, so JSONEncoder never
+        // wrote it, and the only code path in that build that ever touched
+        // these PD fields was the explicit "Reset Health Counters" action
+        // (auto-baseline did not exist yet). A marker-less payload carrying
+        // any PD key can therefore only be an explicit reset, so it decodes
+        // as already baselined: treating it as unbaselined would let the
+        // very next PD-reporting snapshot silently overwrite that user's
+        // explicit reset via auto-baseline.
+        let preMarkerJSON = """
+        {
+            "overcurrentCount": 0,
+            "linkErrorCount": 0,
+            "enumerationFailureCount": 0,
+            "addressFailureCount": 0,
+            "ldcmStatus": "",
+            "pdHardResetCount": 5,
+            "pdShortDetectCount": 6,
+            "pdRoleSwapFailCount": 7,
+            "pdI2cErrorCount": 8,
+            "pdAttachCount": 9,
+            "pdDetachCount": 10
+        }
+        """
+        let decoded = try JSONDecoder().decode(AcknowledgedCounters.self, from: Data(preMarkerJSON.utf8))
+
+        #expect(decoded.pdBaselined == true)
+        #expect(decoded.pdHardResetCount == 5)
+        #expect(decoded.pdAttachCount == 9)
+        #expect(decoded.pdDetachCount == 10)
+    }
+
+    @Test("A payload with no PD keys at all (pre-PD-fields shape) decodes pdBaselined false")
+    func decodingPayloadWithNoPDKeysDecodesUnbaselined() throws {
+        // The original pre-PD-fields shape (see decodingOldPayloadDefaultsPDFieldsToZero
+        // above): no PD keys exist at all, so there is nothing that could
+        // have been an explicit PD reset. Correctly "never baselined", which
+        // lets FlightRecorder's auto-baseline fire the first time this
+        // port's PD data is actually seen.
+        let oldPayloadJSON = """
+        {
+            "overcurrentCount": 3,
+            "linkErrorCount": 1,
+            "enumerationFailureCount": 0,
+            "addressFailureCount": 0,
+            "ldcmStatus": "No Error"
+        }
+        """
+        let decoded = try JSONDecoder().decode(AcknowledgedCounters.self, from: Data(oldPayloadJSON.utf8))
+
+        #expect(decoded.pdBaselined == false)
     }
 }
