@@ -1056,3 +1056,168 @@ import Testing
     #expect(manager.ports[0].id == 1)
     #expect(manager.ports[0].uuid == nil)
 }
+
+// MARK: - PD reliability counters (DAR-289)
+
+// The join is ordinal, not positional-by-port-number: PDReliabilityInput's
+// entryOffset is PortControllerInfo's own 0-based array offset, and it maps
+// to the (i+1)-th USB-C port when the machine's USB-C ports are sorted
+// ascending by physical port number. On contiguous port numbering (1, 2,
+// ...) that lands identically to the old offset+1 == portNumber rule.
+@Test func portManagerJoinsPDReliabilityOrdinallyOnContiguousPorts() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        hpmPorts: [
+            HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C"),
+            HPMPortInput(uuid: "BBBB", portNumber: 2, portType: "USB-C"),
+        ],
+        phyData: [
+            PhyInput(phyID: 0, portNumber: 1),
+            PhyInput(phyID: 1, portNumber: 2),
+        ],
+        tbData: [
+            ThunderboltInput(socketID: 1),
+            ThunderboltInput(socketID: 2),
+        ],
+        pdReliabilityData: [
+            PDReliabilityInput(entryOffset: 0, attachCount: 3, detachCount: 2, hardResetCount: 1),
+            PDReliabilityInput(entryOffset: 1, attachCount: 7, detachCount: 6, i2cErrorCount: 4),
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    let port1 = manager.ports.first { $0.id == 1 }
+    let port2 = manager.ports.first { $0.id == 2 }
+
+    #expect(port1?.pdReliability?.attachCount == 3)
+    #expect(port1?.pdReliability?.detachCount == 2)
+    #expect(port1?.pdReliability?.hardResetCount == 1)
+    #expect(port2?.pdReliability?.attachCount == 7)
+    #expect(port2?.pdReliability?.i2cErrorCount == 4)
+}
+
+// The non-contiguous case the ordinal rule exists for (e.g. M5 MacBook Pro:
+// USB-C ports {1, 2, 4}). Entry offset 0/1/2 must land on ports 1/2/4 in that
+// order, and a trailing 4th entry (the MagSafe controller) must land nowhere.
+@Test func portManagerJoinsPDReliabilityOrdinallyOnNonContiguousPorts() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        hpmPorts: [
+            HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C"),
+            HPMPortInput(uuid: "BBBB", portNumber: 2, portType: "USB-C"),
+            HPMPortInput(uuid: "CCCC", portNumber: 4, portType: "USB-C"),
+        ],
+        phyData: [
+            PhyInput(phyID: 0, portNumber: 1),
+            PhyInput(phyID: 1, portNumber: 2),
+            PhyInput(phyID: 2, portNumber: 4),
+        ],
+        tbData: [
+            ThunderboltInput(socketID: 1),
+            ThunderboltInput(socketID: 2),
+            ThunderboltInput(socketID: 4),
+        ],
+        pdReliabilityData: [
+            PDReliabilityInput(entryOffset: 0, attachCount: 3),
+            PDReliabilityInput(entryOffset: 1, attachCount: 7),
+            PDReliabilityInput(entryOffset: 2, attachCount: 11),
+            // The extra 4th entry: the MagSafe controller. Never a USB-C port.
+            PDReliabilityInput(entryOffset: 3, attachCount: 99),
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    let port1 = manager.ports.first { $0.id == 1 }
+    let port2 = manager.ports.first { $0.id == 2 }
+    let port4 = manager.ports.first { $0.id == 4 }
+
+    #expect(port1?.pdReliability?.attachCount == 3)
+    #expect(port2?.pdReliability?.attachCount == 7)
+    #expect(port4?.pdReliability?.attachCount == 11)
+
+    // The trailing entry (offset 3, the MagSafe controller) never attaches
+    // anywhere: only offsets 0..<usbCCount are ever consumed.
+    #expect(!manager.ports.contains { $0.pdReliability?.attachCount == 99 })
+}
+
+// An entry count that is neither the USB-C port count nor that count + 1
+// breaks the invariant the ordinal rule depends on, so the join fails
+// closed: nothing attaches to any port rather than guessing.
+@Test func portManagerFailsClosedOnUnexpectedPDReliabilityEntryCount() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        hpmPorts: [
+            HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C"),
+            HPMPortInput(uuid: "BBBB", portNumber: 2, portType: "USB-C"),
+        ],
+        phyData: [
+            PhyInput(phyID: 0, portNumber: 1),
+            PhyInput(phyID: 1, portNumber: 2),
+        ],
+        tbData: [
+            ThunderboltInput(socketID: 1),
+            ThunderboltInput(socketID: 2),
+        ],
+        // 2 USB-C ports: a valid count would be 2 or 3. 4 matches neither.
+        pdReliabilityData: [
+            PDReliabilityInput(entryOffset: 0, attachCount: 3),
+            PDReliabilityInput(entryOffset: 1, attachCount: 7),
+            PDReliabilityInput(entryOffset: 2, attachCount: 11),
+            PDReliabilityInput(entryOffset: 3, attachCount: 99),
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    #expect(manager.ports.allSatisfy { $0.pdReliability == nil })
+}
+
+// MagSafe never receives an ordinal PortControllerInfo entry: even when a PD
+// reliability entry's offset would collide with MagSafe's own port number
+// (the same "@N" collision USB-C and MagSafe already share elsewhere), only
+// the USB-C port at that ordinal position may receive it.
+@Test func portManagerNeverAttachesPDReliabilityToMagSafe() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        hpmPorts: [
+            HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C"),
+            HPMPortInput(uuid: "MMMM", portNumber: 1, portType: "MagSafe 3"),
+        ],
+        phyData: [PhyInput(phyID: 0, portNumber: 1)],
+        tbData: [ThunderboltInput(socketID: 1)],
+        ccData: [CCInput(portNumber: 1, portType: "MagSafe 3", active: true)],
+        pdReliabilityData: [
+            PDReliabilityInput(entryOffset: 0, attachCount: 5),
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    let usbcPort = manager.ports.first { $0.portType == .usbC }
+    let magSafePort = manager.ports.first { $0.portType == .magSafe }
+
+    #expect(usbcPort?.pdReliability?.attachCount == 5)
+    #expect(magSafePort?.pdReliability == nil)
+}
+
+// No pdReliabilityData on the snapshot at all (e.g. a desktop with no
+// PortControllerInfo array) leaves every port's pdReliability nil.
+@Test func portManagerLeavesPDReliabilityNilWithoutData() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        hpmPorts: [HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C")],
+        phyData: [PhyInput(phyID: 0, portNumber: 1)],
+        tbData: [ThunderboltInput(socketID: 1)]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    #expect(manager.ports.first?.pdReliability == nil)
+}

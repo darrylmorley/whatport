@@ -125,6 +125,19 @@ enum SnapshotAdapter {
                     remoteWakeCount: s.remoteWakeCount
                 )
             },
+            pdReliabilityData: snapshot.pdReliabilityData.map { pd in
+                PDReliabilityInput(
+                    entryOffset: pd.entryOffset,
+                    attachCount: pd.attachCount,
+                    detachCount: pd.detachCount,
+                    hardResetCount: pd.hardResetCount,
+                    irqHardResetCount: pd.irqHardResetCount,
+                    shortDetectCount: pd.shortDetectCount,
+                    dataRoleSwapFailCount: pd.dataRoleSwapFailCount,
+                    powerRoleSwapFailCount: pd.powerRoleSwapFailCount,
+                    i2cErrorCount: pd.i2cErrorCount
+                )
+            },
             powerMeteringAvailable: snapshot.powerMeteringAvailable,
             usb3Transport: snapshot.usb3Transport.map { t in
                 USB3TransportInput(

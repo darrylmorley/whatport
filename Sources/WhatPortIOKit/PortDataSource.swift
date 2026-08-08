@@ -29,6 +29,10 @@ public struct PortSnapshot: Sendable {
     public let deviceData: [RawDeviceInfo]
     public let displayData: [RawDisplayInfo]
     public let portStatsData: [RawPortStats]
+    // USB-PD port-controller lifetime reliability counters, keyed positionally
+    // (see PDReliabilityReader). USB-C only; empty on machines without a
+    // PortControllerInfo array (Mac Studio class desktops).
+    public let pdReliabilityData: [RawPDReliability]
     public let powerMeteringAvailable: Bool
     // Live transport state from IOPortTransportState* services
     public let usb3Transport: [RawUSB3TransportState]
@@ -63,6 +67,7 @@ public struct PortSnapshot: Sendable {
         deviceData: [RawDeviceInfo] = [],
         displayData: [RawDisplayInfo] = [],
         portStatsData: [RawPortStats] = [],
+        pdReliabilityData: [RawPDReliability] = [],
         powerMeteringAvailable: Bool = false,
         usb3Transport: [RawUSB3TransportState] = [],
         dpTransport: [RawDPTransportState] = [],
@@ -84,6 +89,7 @@ public struct PortSnapshot: Sendable {
         self.deviceData = deviceData
         self.displayData = displayData
         self.portStatsData = portStatsData
+        self.pdReliabilityData = pdReliabilityData
         self.powerMeteringAvailable = powerMeteringAvailable
         self.usb3Transport = usb3Transport
         self.dpTransport = dpTransport
@@ -165,6 +171,7 @@ public enum SnapshotReader {
             deviceData: DeviceReader.readUSBDevices(),
             displayData: DisplayReader.readDisplays(),
             portStatsData: PortStatsReader.readAll(),
+            pdReliabilityData: PDReliabilityReader.readAll(),
             powerMeteringAvailable: powerMeteringAvailable,
             usb3Transport: TransportStateReader.readUSB3(),
             dpTransport: TransportStateReader.readDisplayPort(),

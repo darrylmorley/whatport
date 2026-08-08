@@ -31,6 +31,10 @@ public struct PortState: Identifiable, Sendable {
     public var usbDevices: [USBDeviceInfo] = []
     public var cable: CableInfo?
     public var portStats: PortStatistics?
+    // USB-PD port-controller lifetime reliability counters. Nil on machines
+    // without a PortControllerInfo array (desktops) or on MagSafe ports,
+    // which never carry a positional entry. See PDReliabilityReader.
+    public var pdReliability: PDReliabilityCounters?
     public var thunderboltCapability: ThunderboltCapability?
     // Raw DP link rate from PHY, e.g. "5.40Gbps/lane (HBR2)". Empty when
     // no DisplayPort connection is active on this port. Fallback; prefer
@@ -638,6 +642,47 @@ public struct PortStatistics: Sendable, Equatable {
         self.addressFailureCount = addressFailureCount
         self.linkErrorCount = linkErrorCount
         self.remoteWakeCount = remoteWakeCount
+    }
+}
+
+// MARK: - PD Reliability Counters
+
+// USB-PD port-controller lifetime reliability counters, read from
+// AppleSmartBattery.PortControllerInfo (see PDReliabilityReader). USB-C
+// only, joined positionally by physical port number.
+public struct PDReliabilityCounters: Sendable, Equatable {
+    public var attachCount: Int
+    public var detachCount: Int
+    // Two distinct hard-reset counters the controller keeps; they are not
+    // additive (both fire for the same reset from different vantage
+    // points), so consumers use effectiveHardResetCount rather than summing.
+    public var hardResetCount: Int
+    public var irqHardResetCount: Int
+    public var shortDetectCount: Int
+    public var dataRoleSwapFailCount: Int
+    public var powerRoleSwapFailCount: Int
+    public var i2cErrorCount: Int
+
+    public var effectiveHardResetCount: Int { max(hardResetCount, irqHardResetCount) }
+
+    public init(
+        attachCount: Int = 0,
+        detachCount: Int = 0,
+        hardResetCount: Int = 0,
+        irqHardResetCount: Int = 0,
+        shortDetectCount: Int = 0,
+        dataRoleSwapFailCount: Int = 0,
+        powerRoleSwapFailCount: Int = 0,
+        i2cErrorCount: Int = 0
+    ) {
+        self.attachCount = attachCount
+        self.detachCount = detachCount
+        self.hardResetCount = hardResetCount
+        self.irqHardResetCount = irqHardResetCount
+        self.shortDetectCount = shortDetectCount
+        self.dataRoleSwapFailCount = dataRoleSwapFailCount
+        self.powerRoleSwapFailCount = powerRoleSwapFailCount
+        self.i2cErrorCount = i2cErrorCount
     }
 }
 

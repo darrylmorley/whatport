@@ -83,6 +83,7 @@ public final class PortManager: @unchecked Sendable {
             deviceData: snapshot.deviceData,
             displayData: snapshot.displayData,
             portStatsData: snapshot.portStatsData,
+            pdReliabilityData: snapshot.pdReliabilityData,
             usb3Transport: snapshot.usb3Transport,
             dpTransport: snapshot.dpTransport,
             cioTransport: snapshot.cioTransport,
@@ -198,6 +199,11 @@ public struct PortManagerSnapshot: Sendable {
     public let deviceData: [DeviceInput]
     public let displayData: [DisplayInput]
     public let portStatsData: [PortStatsInput]
+    // USB-PD port-controller lifetime reliability counters. The array is
+    // ordinal over the machine's USB-C ports (see PDReliabilityInput), not
+    // positional by physical port number. Empty on machines without a
+    // PortControllerInfo array (desktops).
+    public let pdReliabilityData: [PDReliabilityInput]
     public let powerMeteringAvailable: Bool
     // Live transport state from IOPortTransportState* services
     public let usb3Transport: [USB3TransportInput]
@@ -221,6 +227,7 @@ public struct PortManagerSnapshot: Sendable {
         deviceData: [DeviceInput] = [],
         displayData: [DisplayInput] = [],
         portStatsData: [PortStatsInput] = [],
+        pdReliabilityData: [PDReliabilityInput] = [],
         powerMeteringAvailable: Bool = false,
         usb3Transport: [USB3TransportInput] = [],
         dpTransport: [DPTransportInput] = [],
@@ -242,6 +249,7 @@ public struct PortManagerSnapshot: Sendable {
         self.deviceData = deviceData
         self.displayData = displayData
         self.portStatsData = portStatsData
+        self.pdReliabilityData = pdReliabilityData
         self.powerMeteringAvailable = powerMeteringAvailable
         self.usb3Transport = usb3Transport
         self.dpTransport = dpTransport
@@ -693,6 +701,49 @@ public struct PortStatsInput: Sendable {
     }
 }
 
+// USB-PD port-controller lifetime reliability counters. entryOffset is
+// PortControllerInfo's own 0-based array offset and carries no port
+// identity of its own: the array is ORDINAL over the machine's USB-C ports
+// sorted ascending by physical port number, not positional-by-port-number.
+// That distinction only matters on machines whose USB-C ports are numbered
+// non-contiguously (e.g. {1, 2, 4}); correlate() does the actual join
+// against the USB-C port roster and fails closed (attaches nothing) if the
+// entry count doesn't match the roster. See PDReliabilityReader for the
+// corpus validation behind the ordinal rule.
+public struct PDReliabilityInput: Sendable {
+    public let entryOffset: Int
+    public let attachCount: Int
+    public let detachCount: Int
+    public let hardResetCount: Int
+    public let irqHardResetCount: Int
+    public let shortDetectCount: Int
+    public let dataRoleSwapFailCount: Int
+    public let powerRoleSwapFailCount: Int
+    public let i2cErrorCount: Int
+
+    public init(
+        entryOffset: Int,
+        attachCount: Int = 0,
+        detachCount: Int = 0,
+        hardResetCount: Int = 0,
+        irqHardResetCount: Int = 0,
+        shortDetectCount: Int = 0,
+        dataRoleSwapFailCount: Int = 0,
+        powerRoleSwapFailCount: Int = 0,
+        i2cErrorCount: Int = 0
+    ) {
+        self.entryOffset = entryOffset
+        self.attachCount = attachCount
+        self.detachCount = detachCount
+        self.hardResetCount = hardResetCount
+        self.irqHardResetCount = irqHardResetCount
+        self.shortDetectCount = shortDetectCount
+        self.dataRoleSwapFailCount = dataRoleSwapFailCount
+        self.powerRoleSwapFailCount = powerRoleSwapFailCount
+        self.i2cErrorCount = i2cErrorCount
+    }
+}
+
 // MARK: - Live transport state inputs
 
 public struct USB3TransportInput: Sendable {
@@ -829,6 +880,7 @@ extension PortManager {
         deviceData: [DeviceInput] = [],
         displayData: [DisplayInput] = [],
         portStatsData: [PortStatsInput] = [],
+        pdReliabilityData: [PDReliabilityInput] = [],
         usb3Transport: [USB3TransportInput] = [],
         dpTransport: [DPTransportInput] = [],
         cioTransport: [CIOTransportInput] = [],
@@ -1018,6 +1070,21 @@ extension PortManager {
             portStatsData.map { ($0.portNumber, $0) },
             uniquingKeysWith: { a, _ in a }
         )
+        // Ordinal join, not positional-by-port-number: PortControllerInfo
+        // carries no port identity, only array order, and that order is over
+        // the machine's USB-C ports sorted ascending by physical port
+        // number, not over device-tree port numbers directly. Validated on
+        // 237/237 corpus machines with one powered entry and one active
+        // USB-C source (probe 17), including all 8 non-contiguous machines
+        // in that sample (e.g. USB-C ports {1, 2, 4}); entry count always
+        // equals the USB-C port count, or count+1 with a trailing MagSafe
+        // controller entry, 0 exceptions across the corpus. So this fails
+        // closed on any other count: no best-effort attribution, nothing
+        // attaches to any port.
+        let pdReliabilityByPortID = Self.joinPDReliabilityOrdinally(
+            pdReliabilityData,
+            usbCPortIDs: results.filter { $0.portType == .usbC }.map(\.id).sorted()
+        )
         let ccByPortFull = Dictionary(
             usbCCC.map { ($0.portNumber, $0) },
             uniquingKeysWith: { a, _ in a }
@@ -1082,6 +1149,25 @@ extension PortManager {
                 )
             }
 
+            // PD reliability counters (lifetime USB-PD port-controller
+            // counters). USB-C only: MagSafe never receives an ordinal
+            // PortControllerInfo entry (the join above only ever walks USB-C
+            // port IDs), and the id-space split (MagSafe uses 100 +
+            // portNumber) already keeps the lookup from colliding, but the
+            // type check is kept explicit to match the join rule.
+            if results[i].portType == .usbC, let pd = pdReliabilityByPortID[portID] {
+                results[i].pdReliability = PDReliabilityCounters(
+                    attachCount: pd.attachCount,
+                    detachCount: pd.detachCount,
+                    hardResetCount: pd.hardResetCount,
+                    irqHardResetCount: pd.irqHardResetCount,
+                    shortDetectCount: pd.shortDetectCount,
+                    dataRoleSwapFailCount: pd.dataRoleSwapFailCount,
+                    powerRoleSwapFailCount: pd.powerRoleSwapFailCount,
+                    i2cErrorCount: pd.i2cErrorCount
+                )
+            }
+
             // TB port capability (supported speed/width even when no link active)
             if let tb = tbBySocket[portID] {
                 results[i].thunderboltCapability = ThunderboltCapability(
@@ -1130,6 +1216,38 @@ extension PortManager {
         }
 
         return results
+    }
+
+    // The ordinal join described where this is called: PortControllerInfo
+    // entry offset i (0-based) maps to the (i+1)-th USB-C port when the
+    // machine's USB-C ports are sorted ascending by physical port number.
+    // `usbCPortIDs` must already be that sorted roster. Gated on the entry
+    // count matching the roster count, or the roster count + 1 for a
+    // trailing MagSafe-controller entry, which is dropped (the loop below
+    // only ever consumes offsets < usbCPortIDs.count). Any other count fails
+    // closed: an empty result, never a partial or best-effort one.
+    private static func joinPDReliabilityOrdinally(
+        _ pdReliabilityData: [PDReliabilityInput],
+        usbCPortIDs: [Int]
+    ) -> [Int: PDReliabilityInput] {
+        guard !pdReliabilityData.isEmpty, !usbCPortIDs.isEmpty else { return [:] }
+
+        let usbCCount = usbCPortIDs.count
+        guard pdReliabilityData.count == usbCCount || pdReliabilityData.count == usbCCount + 1 else {
+            return [:]
+        }
+
+        let byOffset = Dictionary(
+            pdReliabilityData.map { ($0.entryOffset, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        var result: [Int: PDReliabilityInput] = [:]
+        for (index, portID) in usbCPortIDs.enumerated() {
+            guard let entry = byOffset[index] else { continue }
+            result[portID] = entry
+        }
+        return result
     }
 
     // Build LiveTransport entries for a port from the transport state services.

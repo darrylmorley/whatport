@@ -403,4 +403,167 @@ enum ProbeCorpus {
 
         return keys
     }
+
+    // MARK: - Probe 32: AppleSmartBattery PortControllerInfo (PD reliability)
+
+    // One entry of the PortControllerInfo array: the counters PDReliabilityReader
+    // reads, plus its array offset (0-based; production code maps offset+1 to a
+    // physical USB-C port number, see PDReliabilityReader).
+    struct PortControllerEntry {
+        let index: Int
+        let attachCount: Int
+        let detachCount: Int
+        let hardResetCount: Int
+        let irqHardResetCount: Int
+        let shortDetectCount: Int
+        let dataRoleSwapFailCount: Int
+        let powerRoleSwapFailCount: Int
+        let i2cErrorCount: Int
+    }
+
+    private static let portControllerWantedKeys: Set<String> = [
+        "PortControllerAttachCount", "PortControllerDetachCount",
+        "PortControllerHardResetCount", "PortControllerIrqCntHrdRst",
+        "PortControllerShortDetectCount",
+        "PortControllerDataRoleSwapFailCount", "PortControllerPwrRoleSwapFailCount",
+        "PortControllerI2cErrCount",
+    ]
+
+    // Isolates the genuine AppleSmartBattery section of a probe-32 capture,
+    // handling the two hazards specific to this probe. Shared by every
+    // caller that needs the section text (not just the parsed entries), so
+    // the truncation/section-cut rules live in exactly one place:
+    //   - A capture cut off mid-dump by the 64KB pipe buffer reads back as
+    //     exactly 65536 BYTES (the pipe's cap is a byte limit, not a
+    //     grapheme-cluster count, so this must compare output.utf8.count,
+    //     not output.count). Any such capture is dropped outright: a
+    //     truncated array would otherwise silently under-count entries
+    //     rather than fail loudly.
+    //   - AppleSmartBatteryManager republishes the same key names further
+    //     down the same capture (a second AppleSmartBattery-shaped dump
+    //     under a different class). Cutting the text at its first
+    //     occurrence keeps only the genuine AppleSmartBattery section, so
+    //     its PortControllerInfo array is not read twice or read from the
+    //     wrong section.
+    // Returns nil for a truncated capture.
+    static func isolatedSmartBatterySection(inFullOutput output: String) -> String? {
+        guard output.utf8.count != 65536 else { return nil }
+        guard let managerRange = output.range(of: "AppleSmartBatteryManager") else { return output }
+        return String(output[output.startIndex..<managerRange.lowerBound])
+    }
+
+    // Parses a whole probe-32 capture's PortControllerInfo array, applying
+    // isolatedSmartBatterySection's truncation guard and section cut first.
+    static func portControllerEntries(inFullOutput output: String) -> [PortControllerEntry] {
+        guard let section = isolatedSmartBatterySection(inFullOutput: output) else { return [] }
+        return portControllerEntries(in: section)
+    }
+
+    // Parses "PortControllerInfo =     Array[N]:" and its "[i]  Dict[M]:"
+    // entries out of one already-isolated AppleSmartBattery section.
+    //
+    // The array's entry headers ("[0]         Dict[63]:") sit at a fixed
+    // indent, one level in from the array's own line; each entry's keys sit a
+    // further level in. A nested array inside an entry (PortControllerPortPDO)
+    // produces its own "[N]  value" lines much deeper still, so entries are
+    // told apart from nested-array items by indent, not by the "[N]" syntax
+    // alone: only a bracket line at exactly the entries' own indent starts a
+    // new entry.
+    static func portControllerEntries(in output: String) -> [PortControllerEntry] {
+        let lines = output.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        guard let arrayLineIndex = lines.firstIndex(where: {
+            $0.trimmingCharacters(in: .whitespaces).hasPrefix("PortControllerInfo =")
+        }) else { return [] }
+
+        // Find the indent of the first entry header after the array line.
+        // Skips blank lines only; the first non-blank, non-bracket line means
+        // the array is empty (e.g. "Array[0]:" with nothing following it).
+        var entryIndent: Int?
+        for line in lines[(arrayLineIndex + 1)...] {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { continue }
+            guard trimmed.hasPrefix("[") else { break }
+            entryIndent = leadingSpaceCount(of: line)
+            break
+        }
+        guard let entryIndent else { return [] }
+
+        var entries: [PortControllerEntry] = []
+        var currentIndex: Int?
+        var currentValues: [String: Int] = [:]
+
+        func finishEntry() {
+            guard let currentIndex else { return }
+            entries.append(PortControllerEntry(
+                index: currentIndex,
+                attachCount: currentValues["PortControllerAttachCount"] ?? 0,
+                detachCount: currentValues["PortControllerDetachCount"] ?? 0,
+                hardResetCount: currentValues["PortControllerHardResetCount"] ?? 0,
+                irqHardResetCount: currentValues["PortControllerIrqCntHrdRst"] ?? 0,
+                shortDetectCount: currentValues["PortControllerShortDetectCount"] ?? 0,
+                dataRoleSwapFailCount: currentValues["PortControllerDataRoleSwapFailCount"] ?? 0,
+                powerRoleSwapFailCount: currentValues["PortControllerPwrRoleSwapFailCount"] ?? 0,
+                i2cErrorCount: currentValues["PortControllerI2cErrCount"] ?? 0
+            ))
+        }
+
+        for line in lines[(arrayLineIndex + 1)...] {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            let lineIndent = leadingSpaceCount(of: line)
+
+            // Dedented below the entries' own indent: the array (and every
+            // entry in it) has ended.
+            if lineIndent < entryIndent { break }
+
+            if lineIndent == entryIndent, trimmed.hasPrefix("["), let close = trimmed.firstIndex(of: "]") {
+                let indexString = trimmed[trimmed.index(after: trimmed.startIndex)..<close]
+                guard let entryIdx = Int(indexString) else { continue }
+                finishEntry()
+                currentIndex = entryIdx
+                currentValues = [:]
+                continue
+            }
+
+            guard currentIndex != nil, let equals = trimmed.range(of: " = ") else { continue }
+            let key = String(trimmed[trimmed.startIndex..<equals.lowerBound])
+            guard portControllerWantedKeys.contains(key) else { continue }
+            currentValues[key] = intValue(String(trimmed[equals.upperBound...]))
+        }
+        finishEntry()
+
+        return entries
+    }
+
+    private static func leadingSpaceCount(of line: String) -> Int {
+        line.prefix { $0 == " " }.count
+    }
+
+    // "1 (0x1)" -> 1. Same numeric format properties(from:)'s scalar() parses,
+    // duplicated locally (rather than reused) because scalar() also handles
+    // strings/bools/nested structures this probe never needs here.
+    private static func intValue(_ raw: String) -> Int {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        if let paren = trimmed.firstIndex(of: "("),
+           let number = Int(trimmed[trimmed.startIndex..<paren].trimmingCharacters(in: .whitespaces)) {
+            return number
+        }
+        return Int(trimmed) ?? 0
+    }
+
+    // "PortControllerInfo =     Array[2]:" -> 2. Used only to compare declared
+    // array lengths against FedDetails for the congruence check; the entry
+    // parser above walks the actual "[N]" headers instead, and both agree on
+    // every corpus machine (2382 entries checked, 0 out of range).
+    static func declaredArrayLength(ofKey key: String, in output: String) -> Int? {
+        for line in output.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix(key + " =") else { continue }
+            guard let open = trimmed.range(of: "Array["), let close = trimmed[open.upperBound...].firstIndex(of: "]") else {
+                return nil
+            }
+            return Int(trimmed[open.upperBound..<close])
+        }
+        return nil
+    }
 }
