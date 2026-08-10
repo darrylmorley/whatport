@@ -15,6 +15,73 @@ public final class PortManager: @unchecked Sendable {
     public private(set) var ports: [PortState] = []
     public private(set) var portCount: Int = 0
     public private(set) var powerMeteringAvailable: Bool = false
+    // Which roster source correlate() actually resolved this snapshot from.
+    // Drives the reduced-detail UI (see PortDataTier); set inside correlate()
+    // itself since it owns the roster branch choice.
+    public private(set) var portDataTier: PortDataTier = .unknown
+
+    // No roster resolved, yet the Mac does have a Thunderbolt controller.
+    //
+    // Every roster source this app has is downstream of the controller
+    // publishing its ports, so when it publishes none there is nothing left to
+    // enumerate from. That is not the same fact as "this Mac has no ports",
+    // and the UI must not claim it is: one Intel MacBook Pro in the probe
+    // corpus (i9-10885H) has a controller that is present and awake, with
+    // MaxPowerState 2, and still enumerates zero ports, where all 65 of its
+    // classmates enumerate two or four (DAR-291).
+    //
+    // Machines with genuinely no Thunderbolt hardware, the pre-Thunderbolt
+    // Macs on patched macOS, report no controller at all and keep the plain
+    // "no ports" wording, which is accurate for them.
+    public var thunderboltControllerPresentButSilent: Bool {
+        confirmedPortDataTier == .none && (controllerPower?.thunderboltControllerCount ?? 0) > 0
+    }
+
+    // The tier the UI is allowed to describe out loud.
+    //
+    // portDataTier above always reflects the snapshot in hand, and everything
+    // that carries data (ports, power, lifecycle, the recorder) follows it
+    // without delay. This one lags it deliberately, and only the wording keys
+    // off it.
+    //
+    // The reason is the wake path: it yields a snapshot straight away, outside
+    // the notifier's 80ms debounce, so one read can land mid-re-enumeration
+    // with the Thunderbolt services already answering and the HPM port
+    // controller not yet. On that single snapshot a fully-supported Mac would
+    // be told it is running in reduced detail, until the next 1 Hz poll took
+    // it back. So a claim that says less has to hold for two snapshots in a
+    // row before it is shown; a claim that says more is shown at once, since
+    // it withdraws a caveat rather than making one.
+    public private(set) var confirmedPortDataTier: PortDataTier = .unknown
+
+    // The tier a downgrade is waiting to be confirmed by, if any.
+    private var unconfirmedTier: PortDataTier?
+
+    private func confirmTier(_ resolved: PortDataTier) {
+        // Same tier or better: show it, and drop any downgrade that was
+        // waiting, so two blips either side of a good snapshot never add up to
+        // a confirmed one.
+        if resolved.detailRank <= confirmedPortDataTier.detailRank {
+            unconfirmedTier = nil
+            confirmedPortDataTier = resolved
+            return
+        }
+
+        // Worse: only say so the second time in a row.
+        //
+        // Corner case, deliberately left: a Mac whose roster source flipped
+        // between two *different* poorer tiers on every single poll, never
+        // repeating one twice, would keep resetting the pending value and
+        // never downgrade the wording. Nothing in the corpus behaves that way,
+        // and this only ever holds back a caption: the ports, power and
+        // recorder data all keep moving regardless.
+        if unconfirmedTier == resolved {
+            unconfirmedTier = nil
+            confirmedPortDataTier = resolved
+        } else {
+            unconfirmedTier = resolved
+        }
+    }
 
     // Battery / charging state (system-level, not per-port)
     public private(set) var isCharging: Bool = false
@@ -102,6 +169,11 @@ public final class PortManager: @unchecked Sendable {
             smcPortPower: snapshot.smcPortPower,
             smcPortContracts: snapshot.smcPortContracts
         )
+
+        // correlate() has just set portDataTier from this snapshot alone. Only
+        // the wording the UI shows lags it, and only on the way down; nothing
+        // carrying data below this line is delayed.
+        confirmTier(portDataTier)
 
         // Lifecycle reconciliation. A port is disconnected once CC drops, or
         // once it stops appearing in the correlated set entirely (e.g. an HPM
@@ -948,6 +1020,7 @@ extension PortManager {
         var results: [PortState]
 
         if !usbcHPM.isEmpty {
+            portDataTier = .full
             results = usbcHPM.enumerated().map { index, hpm in
                 var state = buildPortState(
                     portID: hpm.portNumber,
@@ -969,6 +1042,7 @@ extension PortManager {
                 return state
             }
         } else if !socketIDs.isEmpty {
+            portDataTier = .thunderboltOnly
             results = socketIDs.enumerated().map { index, socketID in
                 buildPortState(
                     portID: socketID,
@@ -979,6 +1053,11 @@ extension PortManager {
                 )
             }
         } else {
+            // No TB socket roster either: the PHY layer is the last resort.
+            // An empty PHY list too means no roster source had anything at
+            // all for this snapshot (.none); a non-empty one is a real,
+            // fully-detailed roster (.full), just built without TB sockets.
+            portDataTier = dedupedPhys.isEmpty ? .none : .full
             results = dedupedPhys.map { phy in
                 let portID = phy.portNumber > 0 ? phy.portNumber : (phy.phyID + 1)
                 return buildPortState(
@@ -1119,8 +1198,16 @@ extension PortManager {
         // disagrees on any offset, the whole snapshot's PD attribution is
         // dropped, fail closed like the count gate above, and logged once.
         let usbCPortIDsForPD = results.filter { $0.portType == .usbC }.map(\.id).sorted()
+        // The ordinal rule above was validated only on HPM-rostered (Apple
+        // Silicon) machines. Intel also publishes PortControllerInfo (64/81
+        // corpus captures) but with a different field set, no validated join
+        // there, and no DxUI channels for the keyed cross-check below to veto
+        // a wrong one. Without an HPM roster there is nothing to safely
+        // ordinal-join against, so feed the join an empty array and fail
+        // closed rather than guess.
+        let pdReliabilityInputForJoin = usbcHPM.isEmpty ? [] : pdReliabilityData
         let pdReliabilityCrossCheck = Self.crossCheckPDJoin(
-            ordinal: Self.joinPDReliabilityOrdinally(pdReliabilityData, usbCPortIDs: usbCPortIDsForPD),
+            ordinal: Self.joinPDReliabilityOrdinally(pdReliabilityInputForJoin, usbCPortIDs: usbCPortIDsForPD),
             usbCPortIDs: usbCPortIDsForPD,
             smcChannels: smcPortPower,
             usbCPorts: results

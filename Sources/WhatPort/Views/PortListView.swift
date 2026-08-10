@@ -83,6 +83,11 @@ struct PortListView: View {
             header
             Divider()
 
+            if portManager.confirmedPortDataTier == .thunderboltOnly {
+                reducedDetailBanner
+                Divider()
+            }
+
             if let update = updates.available {
                 UpdateBanner(update: update)
                 Divider()
@@ -165,17 +170,53 @@ struct PortListView: View {
         return WattsFormat.string(watts) + " from wall"
     }
 
+    // Reduced-detail note: this Mac's port controller doesn't publish the
+    // HPM roster (Intel, or an Apple Silicon Mac without one), so the app is
+    // running on the Thunderbolt socket roster alone. Kept quiet (footnote,
+    // secondary) rather than a full banner: it's informational, not a warning.
+    private var reducedDetailBanner: some View {
+        Text("Reduced detail: this Mac doesn't report USB-C port-controller data.")
+            .scaledFont(.footnote)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
     private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "bolt.horizontal")
-                .scaledFont(.title2)
-                .foregroundStyle(.tertiary)
-            Text("Scanning ports\u{2026}")
-                .scaledFont(.body)
-                .foregroundStyle(.secondary)
+        if portManager.confirmedPortDataTier == .none {
+            VStack(spacing: 8) {
+                Image(systemName: "bolt.horizontal")
+                    .scaledFont(.title2)
+                    .foregroundStyle(.tertiary)
+                Text(portManager.thunderboltControllerPresentButSilent
+                     ? "No ports reported"
+                     : "No ports found on this Mac")
+                    .scaledFont(.body)
+                    .foregroundStyle(.secondary)
+                Text(portManager.thunderboltControllerPresentButSilent
+                     ? "This Mac has a Thunderbolt controller, but it isn't publishing any ports right now."
+                     : "WhatPort couldn't find any Thunderbolt or USB-C ports to monitor.")
+                    .scaledFont(.caption)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 28)
+        } else {
+            VStack(spacing: 8) {
+                Image(systemName: "bolt.horizontal")
+                    .scaledFont(.title2)
+                    .foregroundStyle(.tertiary)
+                Text("Scanning ports\u{2026}")
+                    .scaledFont(.body)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 28)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
     }
 
     private var portList: some View {
@@ -266,7 +307,13 @@ struct PortListView: View {
                 isCharging: portManager.isCharging,
                 fullyCharged: portManager.fullyCharged,
                 chargingStatus: portManager.chargingStatus,
-                acknowledged: portManager.recorder?.acknowledgedCounters(forPort: port.id)
+                acknowledged: portManager.recorder?.acknowledgedCounters(forPort: port.id),
+                // Live tier, not the confirmed one: this hides the lane card,
+                // and hiding it a snapshot early is harmless where showing a
+                // lane state the snapshot has no PHY for would be a false
+                // claim. The banner and empty state use the confirmed tier,
+                // because those are wording rather than data.
+                reducedDetail: portManager.portDataTier == .thunderboltOnly
             )
         }
         .frame(height: 560)

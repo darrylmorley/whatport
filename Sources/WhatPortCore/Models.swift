@@ -850,3 +850,30 @@ public enum PortProtocol: Sendable, Equatable, Codable {
     case charging
     case idle
 }
+
+// MARK: - Port Data Tier
+
+// How much of the port roster this Mac actually reported, driven entirely by
+// which correlate() roster branch resolved (see PortManager). Not an "is this
+// Intel" flag: an HPM-less Apple Silicon Mac would report the same
+// .thunderboltOnly tier as an Intel Mac, and the UI wording is written to stay
+// true either way (see PortListView's reduced banner).
+public enum PortDataTier: Sendable, Equatable {
+    case unknown          // no snapshot applied yet
+    case full             // roster from the HPM port-controller layer, or the PHY fallback
+    case thunderboltOnly  // roster from Thunderbolt socket IDs only, no HPM data
+    case none             // a snapshot arrived and no roster source had data
+
+    // How much detail this tier can show, most first. Orders the tiers so
+    // PortManager can tell an upgrade from a downgrade and hold the latter
+    // back until a second snapshot agrees. `unknown` ranks last, so the first
+    // snapshot of any kind reads as an upgrade and lands immediately.
+    var detailRank: Int {
+        switch self {
+        case .full: return 0
+        case .thunderboltOnly: return 1
+        case .none: return 2
+        case .unknown: return 3
+        }
+    }
+}

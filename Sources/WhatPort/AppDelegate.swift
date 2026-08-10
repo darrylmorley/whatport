@@ -17,7 +17,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let dataSource = LivePortDataSource()
     private var dataTask: Task<Void, Never>?
     private var lifecycleTask: Task<Void, Never>?
-    private var isSupported = true
     private var cancellables = Set<AnyCancellable>()
     private var statusItemMoveObserver: NSObjectProtocol?
 
@@ -67,8 +66,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             MainActor.assumeIsolated { self?.openSettings() }
         }
 
-        isSupported = HardwareCheck.isAppleSilicon()
-
         // Move any existing login-item users onto the keep-alive agent so the
         // overnight-survival behaviour applies without them re-toggling.
         LaunchAtLogin.migrateFromMainAppIfNeeded()
@@ -89,10 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             hook(portManager)
         }
 
-        if isSupported {
-            startDataPipeline()
-            registerForWake()
-        }
+        startDataPipeline()
+        registerForWake()
 
         // Start polling GitHub releases for a newer version (a silent check now,
         // then every 6h). Surfaces an in-popover banner when one is available;
@@ -175,11 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     @ViewBuilder
     private func surfaceContent() -> some View {
-        if isSupported {
-            PortListView(portManager: portManager, footerContext: makeFooterContext())
-        } else {
-            UnsupportedView()
-        }
+        PortListView(portManager: portManager, footerContext: makeFooterContext())
     }
 
     // MARK: - Menu bar mode

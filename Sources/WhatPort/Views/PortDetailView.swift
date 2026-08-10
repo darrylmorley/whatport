@@ -16,6 +16,13 @@ struct PortDetailView: View {
     // Lifetime counts the user has acknowledged (Pro "Reset Health Counters"),
     // subtracted from the health badge so it agrees with the Flight Recorder.
     var acknowledged: AcknowledgedCounters? = nil
+    // True when the port roster came from Thunderbolt socket IDs alone, with
+    // no HPM port-controller layer (Intel, or an Apple Silicon Mac without
+    // one). Lane state (laneInfoSection) comes from the PHY, which doesn't
+    // exist on those machines either, so showing "Idle" there would be a
+    // false claim rather than an honestly unknown one. Defaults to false so
+    // other call sites keep compiling.
+    var reducedDetail: Bool = false
 
     var body: some View {
         ScrollView {
@@ -97,7 +104,13 @@ struct PortDetailView: View {
             }
             if port.portType != .magSafe {
                 connectionsCard
-                sectionCard { laneInfoSection }
+                // Lane state comes from the PHY; without one (reduced-detail
+                // machines) "Idle" would be a false claim, not an honestly
+                // unknown one, so the whole card is skipped rather than shown
+                // with a guessed state.
+                if !reducedDetail {
+                    sectionCard { laneInfoSection }
+                }
                 if let cap = port.thunderboltCapability {
                     sectionCard { thunderboltSection(capability: cap, link: port.thunderboltLink) }
                 }
@@ -111,7 +124,9 @@ struct PortDetailView: View {
                 deviceCardGroup(device)
             }
             connectionsCard
-            sectionCard { laneInfoSection }
+            if !reducedDetail {
+                sectionCard { laneInfoSection }
+            }
             if let cap = port.thunderboltCapability {
                 sectionCard { thunderboltSection(capability: cap, link: port.thunderboltLink) }
             }
@@ -138,7 +153,9 @@ struct PortDetailView: View {
             if let cap = port.thunderboltCapability {
                 sectionCard { thunderboltSection(capability: cap, link: port.thunderboltLink) }
             }
-            sectionCard { laneInfoSection }
+            if !reducedDetail {
+                sectionCard { laneInfoSection }
+            }
             if let cable = port.cable {
                 sectionCard { cableSection(cable) }
             }
@@ -157,7 +174,9 @@ struct PortDetailView: View {
                 sectionCard { displaySection(dpTransport) }
             }
             connectionsCard
-            sectionCard { laneInfoSection }
+            if !reducedDetail {
+                sectionCard { laneInfoSection }
+            }
             if let cap = port.thunderboltCapability {
                 sectionCard { thunderboltSection(capability: cap, link: port.thunderboltLink) }
             }
@@ -171,7 +190,9 @@ struct PortDetailView: View {
 
         case .idle:
             connectionsCard
-            sectionCard { laneInfoSection }
+            if !reducedDetail {
+                sectionCard { laneInfoSection }
+            }
             if let cap = port.thunderboltCapability {
                 sectionCard { thunderboltSection(capability: cap, link: port.thunderboltLink) }
             }

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import WhatPortIOKit
 
@@ -169,5 +170,37 @@ struct ProbeCorpusTests {
         // A key the probe could not read carries no bytes and must not appear
         // as an empty reading.
         #expect(keys["AP1A"] == nil)
+    }
+}
+
+// Every corpus sweep in this suite is `.enabled(if: ProbeCorpus.isAvailable)`,
+// which is right for a working copy without the sibling research repo but
+// wrong for a release: the sweeps are the only evidence for hardware nobody
+// here owns, and a checkout missing the corpus would go green having tested
+// none of it.
+//
+// Set WHATPORT_REQUIRE_PROBE_CORPUS=1 to turn that silence into a failure.
+// scripts/smoke-test.sh sets it, so the release path cannot skip the sweeps.
+@Suite("Probe corpus availability")
+struct ProbeCorpusAvailabilityTests {
+
+    @Test("The corpus is present when the run demands it")
+    func corpusPresentWhenRequired() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let flag = environment["WHATPORT_REQUIRE_PROBE_CORPUS"],
+              flag != "0", !flag.isEmpty
+        else { return }
+
+        #expect(
+            ProbeCorpus.isAvailable,
+            """
+            WHATPORT_REQUIRE_PROBE_CORPUS is set but no corpus was found at \
+            \(ProbeCorpus.root.path). Every corpus sweep would silently skip. \
+            Clone the sibling research repo, or point WHATPORT_PROBE_CORPUS at it.
+            """
+        )
+
+        // Present but empty would skip just as quietly.
+        #expect(ProbeCorpus.machines.count > 100, "Corpus found but nearly empty: \(ProbeCorpus.machines.count)")
     }
 }

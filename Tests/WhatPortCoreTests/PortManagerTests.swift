@@ -1529,3 +1529,290 @@ import Testing
     #expect(port2?.pdReliability?.attachCount == 7)
     #expect(port1?.pdReliability == nil)
 }
+
+// MARK: - Port Data Tier (DAR-291: Intel reduced-capability mode)
+
+@Test func portManagerTierIsUnknownBeforeAnySnapshot() {
+    let manager = PortManager()
+    #expect(manager.portDataTier == .unknown)
+}
+
+@Test func portManagerTierIsFullForHPMRosteredSnapshot() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        hpmPorts: [
+            HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C")
+        ],
+        tbData: [ThunderboltInput(socketID: 1)]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    #expect(manager.portDataTier == .full)
+}
+
+// No HPM roster, but a non-empty Thunderbolt socket roster: the corpus case
+// for Intel (and any HPM-less Apple Silicon Mac). See PortDataTier's doc
+// comment for why this isn't read as "this Mac is Intel".
+@Test func portManagerTierIsThunderboltOnlyForTBSocketRoster() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        tbData: [
+            ThunderboltInput(socketID: 1),
+            ThunderboltInput(socketID: 2)
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    #expect(manager.portDataTier == .thunderboltOnly)
+}
+
+// Neither an HPM roster nor a TB socket roster, but the PHY fallback still
+// has data: a real (if unusual) roster, so this is .full, not reduced.
+@Test func portManagerTierIsFullForPHYOnlyFallback() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        phyData: [
+            PhyInput(phyID: 0),
+            PhyInput(phyID: 1)
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    #expect(manager.portDataTier == .full)
+    #expect(manager.ports.count == 2)
+}
+
+// No HPM roster, no TB sockets, no PHYs: every roster source came back
+// empty, distinct from the PHY-fallback case above where dedupedPhys is
+// non-empty.
+@Test func portManagerTierIsNoneWhenAllRosterSourcesAreEmpty() {
+    let manager = PortManager()
+
+    manager.applySnapshot(PortManagerSnapshot())
+
+    #expect(manager.portDataTier == .none)
+    #expect(manager.ports.isEmpty)
+}
+
+// MARK: - PD reliability gated on an HPM roster (DAR-291)
+
+// A TB-socket-only roster (no HPM) with a PortControllerInfo array whose
+// count satisfies the ordinal join's own count invariant. The join would
+// normally attach it, but the ordinal rule was only validated on HPM-rostered
+// (Apple Silicon) machines, so without an HPM roster it must fail closed
+// regardless of the count matching.
+@Test func portManagerGatesPDReliabilityWithoutHPMRoster() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        tbData: [
+            ThunderboltInput(socketID: 1),
+            ThunderboltInput(socketID: 2)
+        ],
+        pdReliabilityData: [
+            PDReliabilityInput(entryOffset: 0, attachCount: 3),
+            PDReliabilityInput(entryOffset: 1, attachCount: 7)
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    #expect(manager.portDataTier == .thunderboltOnly)
+    #expect(manager.ports.count == 2)
+    #expect(manager.ports.allSatisfy { $0.pdReliability == nil })
+}
+
+// Positive control: the identical PortControllerInfo shape DOES attach once
+// an HPM roster is present, confirming the case above is gated on the
+// missing HPM roster specifically, not some other break in the join.
+@Test func portManagerJoinsPDReliabilityWhenHPMRosterIsPresent() {
+    let manager = PortManager()
+
+    let snapshot = PortManagerSnapshot(
+        hpmPorts: [
+            HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C"),
+            HPMPortInput(uuid: "BBBB", portNumber: 2, portType: "USB-C")
+        ],
+        tbData: [
+            ThunderboltInput(socketID: 1),
+            ThunderboltInput(socketID: 2)
+        ],
+        pdReliabilityData: [
+            PDReliabilityInput(entryOffset: 0, attachCount: 3),
+            PDReliabilityInput(entryOffset: 1, attachCount: 7)
+        ]
+    )
+
+    manager.applySnapshot(snapshot)
+
+    let port1 = manager.ports.first { $0.id == 1 }
+    let port2 = manager.ports.first { $0.id == 2 }
+
+    #expect(manager.portDataTier == .full)
+    #expect(port1?.pdReliability?.attachCount == 3)
+    #expect(port2?.pdReliability?.attachCount == 7)
+}
+
+// MARK: - Silent Thunderbolt controller (DAR-291)
+
+// A Mac with no Thunderbolt hardware at all: the pre-Thunderbolt machines on
+// patched macOS. "No ports" is accurate here.
+@Test func portManagerReportsNoSilentControllerWhenNoControllerExists() {
+    let manager = PortManager()
+
+    manager.applySnapshot(PortManagerSnapshot(
+        controllerPower: ControllerPowerInput(
+            anyThunderboltControllerAwake: nil,
+            anyXHCIControllerAwake: nil,
+            thunderboltControllerCount: 0
+        )
+    ))
+
+    #expect(manager.portDataTier == .none)
+    #expect(manager.thunderboltControllerPresentButSilent == false)
+}
+
+// Controller present, no roster: the app must not claim the Mac has no ports.
+@Test func portManagerFlagsControllerPresentButPublishingNoPorts() {
+    let manager = PortManager()
+
+    manager.applySnapshot(PortManagerSnapshot(
+        controllerPower: ControllerPowerInput(
+            anyThunderboltControllerAwake: true,
+            anyXHCIControllerAwake: nil,
+            thunderboltControllerCount: 1
+        )
+    ))
+
+    #expect(manager.portDataTier == .none)
+    #expect(manager.thunderboltControllerPresentButSilent)
+}
+
+// A resolved roster is never "silent", whatever the controller count says.
+@Test func portManagerNeverFlagsSilentControllerWithARoster() {
+    let manager = PortManager()
+
+    manager.applySnapshot(PortManagerSnapshot(
+        tbData: [ThunderboltInput(socketID: 1), ThunderboltInput(socketID: 2)],
+        controllerPower: ControllerPowerInput(
+            anyThunderboltControllerAwake: true,
+            anyXHCIControllerAwake: nil,
+            thunderboltControllerCount: 1
+        )
+    ))
+
+    #expect(manager.portDataTier == .thunderboltOnly)
+    #expect(manager.thunderboltControllerPresentButSilent == false)
+}
+
+// MARK: - Tier downgrade hysteresis (DAR-291)
+//
+// portDataTier always describes the snapshot in hand. confirmedPortDataTier is
+// what the UI is allowed to say out loud, and it lags on the way down so a
+// wake-time blip cannot tell a fully-supported Mac it is reduced.
+
+@Test func portManagerConfirmedTierHoldsADowngradeForOneSnapshot() {
+    let manager = PortManager()
+
+    manager.applySnapshot(PortManagerSnapshot(
+        hpmPorts: [HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C")],
+        tbData: [ThunderboltInput(socketID: 1)]
+    ))
+    #expect(manager.confirmedPortDataTier == .full)
+
+    manager.applySnapshot(PortManagerSnapshot(tbData: [ThunderboltInput(socketID: 1)]))
+
+    // The snapshot really was reduced, and the live tier says so...
+    #expect(manager.portDataTier == .thunderboltOnly)
+    // ...but the wording waits for a second opinion.
+    #expect(manager.confirmedPortDataTier == .full)
+}
+
+@Test func portManagerConfirmedTierAppliesADowngradeOnceItRepeats() {
+    let manager = PortManager()
+    let degraded = PortManagerSnapshot(tbData: [ThunderboltInput(socketID: 1)])
+
+    manager.applySnapshot(PortManagerSnapshot(
+        hpmPorts: [HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C")],
+        tbData: [ThunderboltInput(socketID: 1)]
+    ))
+    manager.applySnapshot(degraded)
+    manager.applySnapshot(degraded)
+
+    #expect(manager.confirmedPortDataTier == .thunderboltOnly)
+}
+
+@Test func portManagerRecoveryCancelsAPendingDowngrade() {
+    let manager = PortManager()
+    let full = PortManagerSnapshot(
+        hpmPorts: [HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C")],
+        tbData: [ThunderboltInput(socketID: 1)]
+    )
+    let degraded = PortManagerSnapshot(tbData: [ThunderboltInput(socketID: 1)])
+
+    manager.applySnapshot(full)
+    manager.applySnapshot(degraded)
+    manager.applySnapshot(full)
+    manager.applySnapshot(degraded)
+
+    #expect(manager.confirmedPortDataTier == .full)
+}
+
+@Test func portManagerConfirmedTierAppliesUpgradesImmediately() {
+    let manager = PortManager()
+
+    manager.applySnapshot(PortManagerSnapshot(tbData: [ThunderboltInput(socketID: 1)]))
+    #expect(manager.confirmedPortDataTier == .thunderboltOnly)
+
+    manager.applySnapshot(PortManagerSnapshot(
+        hpmPorts: [HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C")],
+        tbData: [ThunderboltInput(socketID: 1)]
+    ))
+    #expect(manager.confirmedPortDataTier == .full)
+}
+
+// The first snapshot is an upgrade from .unknown whatever it resolves to, so a
+// Mac that genuinely has nothing reaches .none at once rather than sitting on
+// "Scanning ports…" forever.
+@Test func portManagerReachesNoneOnTheFirstEmptySnapshot() {
+    let manager = PortManager()
+
+    manager.applySnapshot(PortManagerSnapshot())
+
+    #expect(manager.portDataTier == .none)
+    #expect(manager.confirmedPortDataTier == .none)
+}
+
+// The whole point of debouncing the wording rather than the data: a held-back
+// caption must never hold back a port list, a wattage or a connection event.
+@Test func portManagerKeepsDataLiveWhileTheWordingIsHeldBack() {
+    let manager = PortManager()
+
+    manager.applySnapshot(PortManagerSnapshot(
+        hpmPorts: [
+            HPMPortInput(uuid: "AAAA", portNumber: 1, portType: "USB-C"),
+            HPMPortInput(uuid: "BBBB", portNumber: 2, portType: "USB-C")
+        ],
+        tbData: [ThunderboltInput(socketID: 1), ThunderboltInput(socketID: 2)],
+        powerData: [PowerInput(portIndex: 1, watts: 5_000, current: 1000, adapterVoltage: 5000)]
+    ))
+    #expect(manager.ports.count == 2)
+
+    // A reduced snapshot carrying a real power change on one port.
+    manager.applySnapshot(PortManagerSnapshot(
+        tbData: [ThunderboltInput(socketID: 1)],
+        powerData: [PowerInput(portIndex: 1, watts: 27_000, current: 3000, adapterVoltage: 9000)]
+    ))
+
+    // Wording still says full detail...
+    #expect(manager.confirmedPortDataTier == .full)
+    // ...while the data moved with the snapshot, not with the caption.
+    #expect(manager.ports.count == 1)
+    #expect(manager.ports.first?.power?.watts == 27.0)
+}
