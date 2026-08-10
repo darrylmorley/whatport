@@ -20,6 +20,12 @@ public struct PortState: Identifiable, Sendable {
     public var ccConnected: Bool
     public var thunderboltLink: ThunderboltLinkState?
     public var power: PortPower?
+    // Energy delivered to the attached device since it was plugged in. Nil
+    // unless PowerOutDetails carries an accumulator for this port, i.e. only
+    // while the port is sourcing power on a Mac with a battery controller.
+    // Survives a momentary drop to 0 W (which clears `power`), because the
+    // session total is still the answer to "how much has this port given it".
+    public var energy: PortEnergy?
     // Identity of the charger supplying this port (incoming power only).
     // Nil unless a charger is attached and AppleSmartBattery reports details.
     public var charger: ChargerInfo?
@@ -427,6 +433,47 @@ public struct PortPower: Sendable, Equatable {
         self.vconnMaxCurrent = vconnMaxCurrent
         self.direction = direction
         self.contractIsEstimated = contractIsEstimated
+    }
+}
+
+// MARK: - Port Energy
+
+// Energy this port has delivered to the attached device since it was plugged
+// in, from AppleSmartBattery.PowerOutDetails AccumulatedPower / AccumulatorCount
+// (see RawPowerData for how the units were established).
+//
+// Deliberately not a lifetime figure: the firmware resets the accumulator on
+// attach, so this is per session. Outgoing power only, and only on machines
+// with a battery controller, so never on desktops and never on MagSafe.
+public struct PortEnergy: Sendable, Equatable {
+    // Running sum of 1 Hz power samples, in milliwatt-seconds (millijoules).
+    public var millijoules: Int
+    // Number of samples, which at 1 Hz is also the elapsed seconds.
+    public var sampleCount: Int
+
+    public var wattHours: Double { Double(millijoules) / 3_600_000.0 }
+
+    // How long the accumulator has been running. The port may have idled at
+    // 0 W for part of it, so this is attach duration, not delivery duration.
+    public var duration: TimeInterval { TimeInterval(sampleCount) }
+
+    // Mean power over the whole session, which is what the firmware's own
+    // FilteredPower converges on.
+    public var averageWatts: Double {
+        guard sampleCount > 0 else { return 0 }
+        return Double(millijoules) / Double(sampleCount) / 1000.0
+    }
+
+    // AccumulatorCount is 16-bit. Past its ceiling the pair stops being a
+    // total, so callers must present the figure as a floor ("at least N Wh")
+    // rather than a measurement. The margin below 65535 covers a firmware
+    // batch landing between two reads: updates arrive in ~60 s bursts, so the
+    // count can jump by ~60 in one step.
+    public var isAtCounterCap: Bool { sampleCount >= 65_000 }
+
+    public init(millijoules: Int, sampleCount: Int) {
+        self.millijoules = millijoules
+        self.sampleCount = sampleCount
     }
 }
 

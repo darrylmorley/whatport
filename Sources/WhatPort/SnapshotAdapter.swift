@@ -61,7 +61,9 @@ enum SnapshotAdapter {
                     configuredCurrent: pwr.configuredCurrent,
                     vconnCurrent: pwr.vconnCurrent,
                     vconnPower: pwr.vconnPower,
-                    vconnMaxCurrent: pwr.vconnMaxCurrent
+                    vconnMaxCurrent: pwr.vconnMaxCurrent,
+                    accumulatedPowerMJ: pwr.accumulatedPowerMJ,
+                    accumulatorCount: pwr.accumulatorCount
                 )
             },
             ccData: snapshot.ccData.map { cc in

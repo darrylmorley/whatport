@@ -59,4 +59,13 @@ public final class PluginRegistry {
     public func register(deviceTreeBuilder: @escaping (PortState) -> AnyView?) {
         deviceTreeBuilders.append(deviceTreeBuilder)
     }
+
+    // Extra rows appended inside PortDetailView's Power section. Same contract
+    // as deviceTreeBuilders: the closure owns its own gating and returns nil
+    // when it has nothing to show, so the host renders nothing rather than an
+    // empty row.
+    public private(set) var powerRowBuilders: [(PortState) -> AnyView?] = []
+    public func register(powerRowBuilder: @escaping (PortState) -> AnyView?) {
+        powerRowBuilders.append(powerRowBuilder)
+    }
 }

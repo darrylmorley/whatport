@@ -698,6 +698,18 @@ struct PortDetailView: View {
                     .scaledFont(.subheadline)
                     .foregroundStyle(.secondary)
             }
+
+            // Pro rows (session energy). Outside the if/else above because the
+            // session total still applies during a lull where the port is
+            // attached but drawing nothing and `power` is nil. Same reason as
+            // deviceCardGroup for running the builders inside body: they read
+            // the licence state, so an unlock takes effect without reopening.
+            ForEach(
+                Array(PluginRegistry.shared.powerRowBuilders.compactMap { $0(port) }.enumerated()),
+                id: \.offset
+            ) { _, row in
+                row
+            }
         }
     }
 

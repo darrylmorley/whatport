@@ -26,6 +26,22 @@ public struct RawPowerData: Sendable {
     public let vconnPower: Int
     public let vconnMaxCurrent: Int
     public let powerState: Int
+    // Energy delivered on this port since the device was attached, as a running
+    // sum of 1-second power samples: AccumulatedPower is milliwatt-seconds
+    // (millijoules) and AccumulatorCount is the number of samples, i.e. seconds.
+    //
+    // The 1 Hz tick was measured directly (M4 Max, iPad drawing 15 W: the count
+    // advanced 168 over 165.6 s, while AppleSmartBattery's own
+    // SystemLoadAccumulatorCount advanced 67 and 59 over two 60 s gaps).
+    // AccumulatedPower / AccumulatorCount also lands on FilteredPower to within
+    // a few percent across the probe corpus, which is what a sum of samples
+    // divided by a sample count has to do.
+    //
+    // Not a lifetime counter despite the name: the firmware resets it when the
+    // device attaches, and AccumulatorCount is 16-bit, so it stops being a total
+    // after 65535 s (18.2 hours). The domain layer flags that ceiling.
+    public let accumulatedPowerMJ: Int
+    public let accumulatorCount: Int
 }
 
 // Live system-level charging power from PowerTelemetryData.
@@ -90,7 +106,9 @@ public enum PowerReader {
                     vconnCurrent: ioInt(dict["VConnCurrent"]),
                     vconnPower: ioInt(dict["VConnPower"]),
                     vconnMaxCurrent: ioInt(dict["VConnMaxCurrent"]),
-                    powerState: ioInt(dict["PowerState"])
+                    powerState: ioInt(dict["PowerState"]),
+                    accumulatedPowerMJ: ioInt(dict["AccumulatedPower"]),
+                    accumulatorCount: ioInt(dict["AccumulatorCount"])
                 )
                 results.append(data)
             }

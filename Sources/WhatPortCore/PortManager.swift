@@ -451,6 +451,10 @@ public struct PowerInput: Sendable {
     public let vconnCurrent: Int
     public let vconnPower: Int
     public let vconnMaxCurrent: Int
+    // Session energy accumulator: milliwatt-seconds and 1 Hz sample count.
+    // Both zero on machines that don't publish it.
+    public let accumulatedPowerMJ: Int
+    public let accumulatorCount: Int
 
     public init(
         portIndex: Int,
@@ -461,7 +465,9 @@ public struct PowerInput: Sendable {
         configuredCurrent: Int = 0,
         vconnCurrent: Int = 0,
         vconnPower: Int = 0,
-        vconnMaxCurrent: Int = 0
+        vconnMaxCurrent: Int = 0,
+        accumulatedPowerMJ: Int = 0,
+        accumulatorCount: Int = 0
     ) {
         self.portIndex = portIndex
         self.watts = watts
@@ -472,6 +478,8 @@ public struct PowerInput: Sendable {
         self.vconnCurrent = vconnCurrent
         self.vconnPower = vconnPower
         self.vconnMaxCurrent = vconnMaxCurrent
+        self.accumulatedPowerMJ = accumulatedPowerMJ
+        self.accumulatorCount = accumulatorCount
     }
 }
 
@@ -1155,6 +1163,14 @@ extension PortManager {
         // Name the charger on whichever port ended up receiving power. Runs
         // after every power path so it only tags a confirmed incoming port.
         applyChargerIdentity(to: &results, chargerIdentity: chargerIdentity)
+
+        // The energy accumulator only counts power OUT, so it is meaningless on
+        // a port the power paths above settled as incoming. Dropped here rather
+        // than at build time because which direction wins isn't known until all
+        // of them have run.
+        for i in results.indices where results[i].power?.direction == .incoming {
+            results[i].energy = nil
+        }
 
         // Build lookup dictionaries for enrichment data. Devices are grouped
         // (not first-wins) because a port can carry a whole tree behind a
@@ -1916,6 +1932,22 @@ extension PortManager {
             thunderboltLink: tbLink,
             power: portPower
         )
+        // Set independently of `portPower` above: the accumulator is the
+        // session total, so it stays meaningful during a lull where the port
+        // is attached but drawing nothing and `power` goes nil.
+        // A negative accumulator is not a number we can show. The registry
+        // value's true width is undocumented; if it is ever boxed as a signed
+        // 32-bit int, a long high-power session would wrap past bit 31 and
+        // sign-extend into a negative Int here. Nothing observed in the corpus
+        // comes close (the largest is 216 million, and the 16-bit sample count
+        // caps a session at 18.2 hours first), but showing no figure beats
+        // showing a negative one.
+        if let pwr = power, pwr.accumulatorCount > 0, pwr.accumulatedPowerMJ >= 0 {
+            state.energy = PortEnergy(
+                millijoules: pwr.accumulatedPowerMJ,
+                sampleCount: pwr.accumulatorCount
+            )
+        }
         state.dpLinkRate = phy?.dpLinkRate ?? ""
         state.dpTunnelLinkRate = phy?.dpTunnel ?? ""
         return state
