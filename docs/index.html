@@ -7,7 +7,7 @@
     <title>WhatPort: Real-time USB-C port monitoring for Mac</title>
     <meta
       name="description"
-      content="See what every USB-C port on your Mac is doing right now. Protocol, speed, lane status, and live power monitoring in a lightweight menu bar app. Free, open source, Apple Silicon."
+      content="See what every USB-C port on your Mac is doing right now. Protocol, speed, lane status, and live power monitoring in a lightweight menu bar app. Free, open source, Intel and Apple Silicon."
     >
     <link rel="canonical" href="https://www.whatport.app/">
     <link rel="icon" href="icon.png" type="image/png">
@@ -54,7 +54,7 @@
       "description": "Real-time USB-C port monitoring for Mac. See protocol, speed, lane status, and power for every port.",
       "url": "https://www.whatport.app",
       "downloadUrl": "https://github.com/darrylmorley/whatport/releases/latest/download/WhatPort.zip",
-      "softwareVersion": "1.9.0",
+      "softwareVersion": "1.10.0",
       "author": {
         "@type": "Person",
         "name": "Darryl Morley",
@@ -74,7 +74,7 @@
           "name": "Does it work on Intel Macs?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. WhatPort reads data from Apple Silicon-specific IOKit services (AppleTypeCPhy, IOPortTransportStateCC) that don't exist on Intel Macs. You need an M1 or later."
+            "text": "Yes, in reduced detail. Intel Macs don't publish the USB-C port-controller services Apple Silicon does (AppleTypeCPhy, IOPortTransportStateCC), so per-port USB-PD contracts, pin configuration and port health aren't available. You still get Thunderbolt ports with link speed and width, the full device tree behind each port, and power. The app shows a banner saying so rather than leaving blanks."
           }
         },
         {
@@ -945,7 +945,7 @@
             </span>
             <span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-              Apple Silicon, macOS 14+
+              macOS 14+, Intel and Apple Silicon
             </span>
             <span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
@@ -1259,7 +1259,7 @@
               Buy WhatPort Pro
               <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
             </button>
-            <p class="buy-reassure"><strong>14-day money-back guarantee, no questions asked.</strong> Apple Silicon only (M1 and later).</p>
+            <p class="buy-reassure"><strong>14-day money-back guarantee, no questions asked.</strong> Full detail on Apple Silicon; Intel Macs run in reduced detail.</p>
             <p class="buy-stripe-note">Secure checkout via Stripe. Your licence key is emailed instantly.<br>By buying you agree to the <a href="/terms.html">terms and conditions</a>.</p>
             <p class="buy-error" id="buy-error" role="alert" hidden></p>
           </div>
@@ -1308,7 +1308,7 @@
         <div class="faq-list">
           <div class="faq-item">
             <h3>Does it work on Intel Macs?</h3>
-            <p>No. WhatPort reads data from Apple Silicon-specific IOKit services (AppleTypeCPhy, IOPortTransportStateCC) that don't exist on Intel Macs. You need an M1 or later.</p>
+            <p>Yes, in reduced detail. Intel Macs don't publish the USB-C port-controller services Apple Silicon does (AppleTypeCPhy, IOPortTransportStateCC), so per-port USB-PD contracts, pin configuration and port health aren't available. You still get Thunderbolt ports with link speed and width, the full device tree behind each port, and power. The app shows a banner saying so rather than leaving blanks.</p>
           </div>
           <div class="faq-item">
             <h3>Does it work on desktop Macs?</h3>
@@ -1377,7 +1377,7 @@
           <h2>Download and go.</h2>
           <p>
             WhatPort is signed, notarised, and ready to run.
-            Requires macOS 14 (Sonoma) or later on Apple Silicon.
+            Requires macOS 14 (Sonoma) or later, on Intel or Apple Silicon.
           </p>
         </div>
 

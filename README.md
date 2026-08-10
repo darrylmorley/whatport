@@ -6,7 +6,7 @@
 
 A lightweight macOS menu bar utility that shows real-time USB-C and Thunderbolt port status. See what's connected, how fast it's running, and how much power each port is using.
 
-Free and open source. Apple Silicon only (M1 and later).
+Free and open source. Full detail on Apple Silicon; Intel Macs run in reduced detail (see [Requirements](#requirements)).
 
 <p align="center">
   <img src="screenshots/port-list.webp" width="280" alt="WhatPort port list showing connected devices">
@@ -75,7 +75,18 @@ The app is signed and notarized by Apple.
 ## Requirements
 
 - macOS 14.0 (Sonoma) or later
-- Apple Silicon Mac (M1, M2, M3, M4, or later)
+- Apple Silicon (M1, M2, M3, M4, or later) for full detail
+- Intel Macs are supported in reduced detail
+
+### What Intel Macs show
+
+Intel Macs don't publish the USB-C port-controller data Apple Silicon does, so
+some of what WhatPort reports simply isn't there to read. The app says so in a
+banner rather than showing blanks.
+
+You still get: Thunderbolt ports and their link speed and width, the full device
+tree behind each port, and power. What's missing is the port-controller layer:
+per-port USB-PD contracts, pin configuration, and the port health counters.
 
 ## Build from source
 

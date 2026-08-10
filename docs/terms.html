@@ -250,9 +250,15 @@
         <h2>3. What WhatPort Pro is</h2>
         <p>
           WhatPort Pro unlocks the Flight Recorder inside the same WhatPort app. It is
-          not a separate download. It requires macOS 14 (Sonoma) or later on an Apple
-          Silicon Mac. Intel Macs are not supported, because they do not publish the
-          port controller data the app reads.
+          not a separate download. It requires macOS 14 (Sonoma) or later, and runs on
+          both Intel and Apple Silicon Macs.
+        </p>
+        <p>
+          On Intel Macs the app runs in reduced detail, because they do not publish the
+          USB-C port controller data Apple Silicon does. The Flight Recorder works, but
+          only on the data that machine reports: per-port USB-PD contracts, pin
+          configuration and port health counters are not available on Intel and so are
+          absent from recordings and exports made there.
         </p>
         <p>
           The features included in Pro are described on the
