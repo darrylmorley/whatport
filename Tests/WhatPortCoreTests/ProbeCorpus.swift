@@ -9,10 +9,10 @@ import Foundation
 // corpus through the real parse functions is the only way to exercise hardware
 // this repo does not own.
 //
-// The corpus is not in this repository and is not in git: it lives in the
-// sibling whatcable-app working copy. Every sweep must therefore degrade to a
-// skip when it is absent, never to a failure, or a fresh clone goes red for a
-// reason that has nothing to do with the code.
+// The corpus is not in this repository: it lives in the sibling whatx-research
+// checkout, its own private repo shared by every app that replays it. Every
+// sweep must therefore degrade to a skip when it is absent, never to a failure,
+// or a fresh clone goes red for a reason that has nothing to do with the code.
 enum ProbeCorpus {
     // The sibling repo's corpus, or an override for a checkout somewhere else.
     static let root: URL = {
@@ -24,7 +24,7 @@ enum ProbeCorpus {
             .deletingLastPathComponent()   // Tests
             .deletingLastPathComponent()   // whatport
             .deletingLastPathComponent()   // personal
-            .appendingPathComponent("whatcable-app/research/customer-probes")
+            .appendingPathComponent("whatx-research/research/customer-probes")
     }()
 
     static var isAvailable: Bool {
