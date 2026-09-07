@@ -789,11 +789,7 @@ struct PortDetailView: View {
     // The whole-number check runs on the FORMATTED value: 4960 mV formats to
     // "5.0", which must render as "5 V", not "5.0 V".
     private func formatVolts(_ millivolts: Int) -> String {
-        let formatted = String(format: "%.1f", Double(millivolts) / 1000.0)
-        if formatted.hasSuffix(".0") {
-            return "\(formatted.dropLast(2)) V"
-        }
-        return "\(formatted) V"
+        "\(WattsFormat.oneDecimalTrimmed(Double(millivolts) / 1000.0)) V"
     }
 
     // Converts milliamps to a human-readable current string.
@@ -804,11 +800,7 @@ struct PortDetailView: View {
         if milliamps < 1000 {
             return "\(milliamps) mA"
         }
-        let formatted = String(format: "%.1f", Double(milliamps) / 1000.0)
-        if formatted.hasSuffix(".0") {
-            return "\(formatted.dropLast(2)) A"
-        }
-        return "\(formatted) A"
+        return "\(WattsFormat.oneDecimalTrimmed(Double(milliamps) / 1000.0)) A"
     }
 
     // MARK: - Power Chart
@@ -857,7 +849,7 @@ struct PortDetailView: View {
                 AxisMarks(position: .leading, values: [0, mid, ceiling]) { value in
                     AxisValueLabel {
                         if let w = value.as(Double.self) {
-                            Text(String(format: fmt, w))
+                            Text(String(format: fmt, locale: .current, w))
                                 .scaledFont(size: 12)
                         }
                     }
@@ -1096,7 +1088,7 @@ struct LaneBar: View {
             if value == value.rounded() {
                 return "\(Int(value)) Gbps"
             }
-            return String(format: "%.1f Gbps", value)
+            return String(format: "%.1f Gbps", locale: .current, value)
         }
         return raw
     }

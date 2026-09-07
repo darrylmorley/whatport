@@ -57,6 +57,11 @@ let package = Package(
             name: "WhatPortCoreTests",
             dependencies: ["WhatPortCore", "WhatPortIOKit"],
             path: "Tests/WhatPortCoreTests"
+        ),
+        .testTarget(
+            name: "WhatPortAppTests",
+            dependencies: ["WhatPort"],
+            path: "Tests/WhatPortAppTests"
         )
     ]
 )
