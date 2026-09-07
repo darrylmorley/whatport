@@ -255,8 +255,8 @@ struct PowerAttributionReplayTests {
     // No machine in this corpus currently has two ports incoming at once
     // (matches MagSafePowerTests' own comment: "never observed in 532
     // corpus machines"), so that half of the invariant is currently proven
-    // by construction (SMCContractAttribution's gates) and by the DAR-226
-    // sweep below, not by a red run of this specific line.
+    // by construction (SMCContractAttribution's gates) and by the MagSafe
+    // vs USB-C sweep below, not by a red run of this specific line.
     @Test(
         "At most one port shows incoming power, always CC-connected, plausible watts, never both MagSafe and USB-C",
         .enabled(if: ProbeCorpus.isAvailable)
@@ -317,7 +317,7 @@ struct PowerAttributionReplayTests {
         )
     }
 
-    // MARK: - 2. DAR-223: the M1 Pro/Max/Ultra SMC fallback
+    // MARK: - 2. The M1 Pro/Max/Ultra SMC fallback
 
     // The fallback (applySMCContract) is the only path that can put an
     // incoming reading on a USB-C port when chargerData has no winning USB-C
@@ -383,7 +383,7 @@ struct PowerAttributionReplayTests {
         // differently-shaped set than that document's.
         #expect(fallbackFired >= 30, "Expected the M1 Pro/Max/Ultra fallback to fire on a floor of machines, got \(fallbackFired) of \(eligible) eligible")
 
-        // Independent re-derivation (DAR-227): bypasses SMCPowerReader,
+        // Independent re-derivation: bypasses SMCPowerReader,
         // PortManager and SMCContractAttribution entirely. Re-decodes the
         // raw SMC bytes with a standalone big-endian reducer written fresh
         // in this file, and re-derives "no winning USB-C node" and
@@ -398,7 +398,7 @@ struct PowerAttributionReplayTests {
         try #require(independent.upperBound >= fallbackFired, "Independent check should never be stricter than production")
     }
 
-    // MARK: - 3. DAR-226: MagSafe vs USB-C
+    // MARK: - 3. MagSafe vs USB-C
 
     // Mutation used to prove this can fail: inverted the second check's
     // condition (`if ... contains(...)` to `if !... contains(...)`), which
@@ -441,7 +441,7 @@ struct PowerAttributionReplayTests {
         try #require(usbCNodeMachines > 100, "Expected machines with a USB-C node contract, got \(usbCNodeMachines)")
         #expect(violations.isEmpty, "\(violations.count) violations: \(violations.prefix(5))")
 
-        // Independent re-derivation (DAR-248 review fix): a raw-text scan
+        // Independent re-derivation (review fix): a raw-text scan
         // over probe 17 for a WinningPowerSourceOption dict carrying a
         // parsed positive Max Power, restricted to the same five-probe
         // eligibility gate the replay itself requires (see
@@ -459,7 +459,7 @@ struct PowerAttributionReplayTests {
         )
     }
 
-    // MARK: - 4. DAR-247: the 5 V floor, and never from an outgoing channel
+    // MARK: - 4. The 5 V floor, and never from an outgoing channel
 
     // Mutation used to prove this can fail, two halves:
     // 1. Loosened the "sourcing power out" threshold below from `> 0.5` to
@@ -533,7 +533,7 @@ struct PowerAttributionReplayTests {
         // empties the replay is caught.
         try #require(replayed.count >= 400, "Expected a floor of replayed machines, got \(replayed.count)")
 
-        // Independent re-derivation (DAR-227): regex/substring presence
+        // Independent re-derivation: regex/substring presence
         // checks over the raw probe text, calling none of ProbeCorpus's
         // block parsers and none of the *Reader.parse functions. See
         // IndependentReplayEligibilityCheck below.

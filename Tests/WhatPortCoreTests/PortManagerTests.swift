@@ -1057,7 +1057,7 @@ import Testing
     #expect(manager.ports[0].uuid == nil)
 }
 
-// MARK: - PD reliability counters (DAR-289)
+// MARK: - PD reliability counters
 
 // The join is ordinal, not positional-by-port-number: PDReliabilityInput's
 // entryOffset is PortControllerInfo's own 0-based array offset, and it maps
@@ -1222,7 +1222,7 @@ import Testing
     #expect(manager.ports.first?.pdReliability == nil)
 }
 
-// MARK: - PD reliability keyed UUID cross-check (DAR-324)
+// MARK: - PD reliability keyed UUID cross-check
 //
 // The ordinal join above trusts array order. Where a second, keyed route
 // also resolves -- PortControllerInfo entry offset j <-> SMC D-channel
@@ -1530,7 +1530,7 @@ import Testing
     #expect(port1?.pdReliability == nil)
 }
 
-// MARK: - Port Data Tier (DAR-291: Intel reduced-capability mode)
+// MARK: - Port Data Tier (Intel reduced-capability mode)
 
 @Test func portManagerTierIsUnknownBeforeAnySnapshot() {
     let manager = PortManager()
@@ -1600,7 +1600,7 @@ import Testing
     #expect(manager.ports.isEmpty)
 }
 
-// MARK: - PD reliability gated on an HPM roster (DAR-291)
+// MARK: - PD reliability gated on an HPM roster
 
 // A TB-socket-only roster (no HPM) with a PortControllerInfo array whose
 // count satisfies the ordinal join's own count invariant. The join would
@@ -1659,7 +1659,7 @@ import Testing
     #expect(port2?.pdReliability?.attachCount == 7)
 }
 
-// MARK: - Silent Thunderbolt controller (DAR-291)
+// MARK: - Silent Thunderbolt controller
 
 // A Mac with no Thunderbolt hardware at all: the pre-Thunderbolt machines on
 // patched macOS. "No ports" is accurate here.
@@ -1711,7 +1711,7 @@ import Testing
     #expect(manager.thunderboltControllerPresentButSilent == false)
 }
 
-// MARK: - Tier downgrade hysteresis (DAR-291)
+// MARK: - Tier downgrade hysteresis
 //
 // portDataTier always describes the snapshot in hand. confirmedPortDataTier is
 // what the UI is allowed to say out loud, and it lags on the way down so a

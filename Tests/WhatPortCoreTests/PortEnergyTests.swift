@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import WhatPortCore
 
-// Per-port session energy (DAR-290): the AccumulatedPower / AccumulatorCount
+// Per-port session energy: the AccumulatedPower / AccumulatorCount
 // pair from AppleSmartBattery.PowerOutDetails and its conversion to watt-hours.
 // The Flight Recorder side lives in PortEnergyRecorderTests.
 

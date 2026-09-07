@@ -2,7 +2,7 @@ import Testing
 @testable import WhatPort
 import Foundation
 
-// DAR-353: the zero-fraction trim must fire against the locale's own decimal
+// The zero-fraction trim must fire against the locale's own decimal
 // separator. Matching a literal ".0" never fired on "8,0", which left
 // comma-decimal regions with a dangling zero on every trimmed reading.
 @Suite struct WattsFormatTests {

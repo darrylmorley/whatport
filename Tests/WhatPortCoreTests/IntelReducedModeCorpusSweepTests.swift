@@ -3,7 +3,7 @@ import Testing
 @testable import WhatPortCore
 
 // Replays the Intel machines in the customer-probe corpus through the real
-// PortManager pipeline (DAR-291, design section 6).
+// PortManager pipeline (reduced-capability design, section 6).
 //
 // The unit tests in PortManagerTests pin the tier logic against synthetic
 // inputs: they prove the branches are wired correctly, not that real Intel
@@ -12,7 +12,8 @@ import Testing
 // is the thing standing between "reduced mode works" and "reduced mode is a
 // plausible story".
 //
-// The claims under test, all from research/dar-291-intel-design.md:
+// The claims under test, all from the Intel reduced-mode design note in the
+// private research folder:
 //   - IOThunderboltPort Socket IDs are present on Intel and give a roster
 //   - that roster lands the machine in .thunderboltOnly, not .full or .none
 //   - no port acquires pdReliability, because the ordinal join is gated off

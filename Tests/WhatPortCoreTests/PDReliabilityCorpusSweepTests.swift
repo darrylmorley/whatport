@@ -131,7 +131,7 @@ struct PDReliabilityCorpusSweepTests {
         #expect(outOfRange.isEmpty, "\(outOfRange.count) entries out of the plausible 0..<8 range: \(outOfRange.prefix(5))")
     }
 
-    // MARK: - Keyed UUID cross-check (DAR-324)
+    // MARK: - Keyed UUID cross-check
     //
     // Replays the full three-probe chain PortManager.crossCheckPDJoin relies
     // on at runtime: PortControllerInfo entries (probe 32), SMC D-channel

@@ -5,7 +5,7 @@ import Testing
 // Replays recorded IOThunderboltPort adapters through the real
 // ThunderboltReader.parse.
 //
-// This reader is the direct cause of the false failure that started DAR-222:
+// This reader is the direct cause of a false Socket ID failure in the field:
 // a live smoke test asserted every adapter carries a Socket ID, which stops
 // being true the moment a Thunderbolt device is attached, because the
 // downstream switch contributes adapters of its own. The corpus contains both

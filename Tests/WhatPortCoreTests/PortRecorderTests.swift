@@ -86,8 +86,8 @@ struct AcknowledgedCountersCodableTests {
 
     @Test("A payload saved before the pdBaselined marker existed, but carrying PD keys, decodes as baselined")
     func decodingPreMarkerPayloadWithPDKeysDecodesBaselined() throws {
-        // Shape persisted between the attach/detach fields landing (DAR-289
-        // ship) and the pdBaselined marker landing after them (this fix).
+        // Shape persisted between the attach/detach fields shipping and the
+        // pdBaselined marker landing after them (this fix).
         // The marker field did not exist in that build, so JSONEncoder never
         // wrote it, and the only code path in that build that ever touched
         // these PD fields was the explicit "Reset Health Counters" action

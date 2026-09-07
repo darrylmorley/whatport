@@ -450,7 +450,7 @@ private let incomingPower = PortPower(
     #expect(manager.ports.first { $0.id == 1 }?.power == nil)
 }
 
-// MARK: - The 5 V floor (DAR-247)
+// MARK: - The 5 V floor
 
 // The SMC does not always report a 5 V rail as exactly 5000. These are the real
 // figures from the six machines in the probe corpus that report 4750, which a

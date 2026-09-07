@@ -28,7 +28,7 @@ public final class PortManager: @unchecked Sendable {
     // and the UI must not claim it is: one Intel MacBook Pro in the probe
     // corpus (i9-10885H) has a controller that is present and awake, with
     // MaxPowerState 2, and still enumerates zero ports, where all 65 of its
-    // classmates enumerate two or four (DAR-291).
+    // classmates enumerate two or four.
     //
     // Machines with genuinely no Thunderbolt hardware, the pre-Thunderbolt
     // Macs on patched macOS, report no controller at all and keep the plain
@@ -1196,7 +1196,7 @@ extension PortManager {
         // closed on any other count: no best-effort attribution, nothing
         // attaches to any port.
         //
-        // Cross-checked (DAR-324) against a second, keyed route wherever
+        // Cross-checked against a second, keyed route wherever
         // that route resolves: PortControllerInfo entry offset j corresponds
         // to SMC D-channel index j+1, and that channel's DxUI equals the
         // port controller's own UUID, an identification of the physical

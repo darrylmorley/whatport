@@ -61,7 +61,7 @@ public struct AcknowledgedCounters: Sendable, Equatable, Codable {
     // fields themselves default to 0, which is indistinguishable from a
     // deliberate zero baseline: without this marker there is no way to tell
     // "never baselined" from "baselined at zero", so a fresh install could
-    // never trigger the auto-baseline (DAR-289). Added after the fields
+    // never trigger the auto-baseline. Added after the fields
     // above, for the same backward-compat reason: a payload persisted
     // before this marker existed decodes fine (see init(from:)), reading
     // true if it already carries any PD key (it can only have been written

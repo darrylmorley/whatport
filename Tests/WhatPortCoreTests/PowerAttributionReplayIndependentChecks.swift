@@ -1,6 +1,6 @@
 import Foundation
 
-// Independent re-derivations for PowerAttributionReplayTests (DAR-227): every
+// Independent re-derivations for PowerAttributionReplayTests: every
 // headline count that sweep asserts is reproduced here by a mechanism that
 // does not call the block parsers or *Reader.parse functions the main
 // replay uses, so a bug shared between "the code" and "the test that checks
@@ -62,7 +62,7 @@ enum IndependentReplayEligibilityCheck {
     }
 }
 
-// MARK: - DAR-223 SMC fallback upper bound
+// MARK: - SMC fallback upper bound
 
 // A loose UPPER BOUND on how many machines the SMC-contract fallback could
 // fire on: externally connected, no winning USB-C node contract, and a
@@ -275,7 +275,7 @@ enum IndependentSMCFallbackCheck {
     }
 }
 
-// MARK: - DAR-248 review fix: USB-C-winning-node machine count
+// MARK: - Review fix: USB-C-winning-node machine count
 
 // A genuine independent re-derivation of the "199 machines have a winning
 // USB-C node contract" figure PowerAttributionReplayTests' own

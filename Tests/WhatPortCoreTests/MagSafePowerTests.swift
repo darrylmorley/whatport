@@ -339,7 +339,7 @@ private func magSafePort(_ manager: PortManager) -> PortState? {
     #expect(power?.configuredCurrent == 0)
 }
 
-// MARK: - USB-C evidence must respect direction too (DAR-247)
+// MARK: - USB-C evidence must respect direction too
 
 // The SMC-evidence question ("is USB-C the connector being fed?") has to ask
 // the same thing the attribution path asks. It reads a USB-C contract channel,
