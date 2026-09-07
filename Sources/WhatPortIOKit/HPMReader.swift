@@ -2,9 +2,11 @@ import Foundation
 import IOKit
 
 // Reads the physical USB-C / MagSafe port roster from the HPM port-controller
-// layer. This is the authoritative list of physical ports: each entry carries
-// a stable UUID (read from the HPM controller ancestor) that uniquely
+// layer. This is the authoritative list of physical ports: each entry normally
+// carries a stable UUID (read from the HPM controller ancestor) that uniquely
 // identifies the port, even when MagSafe and USB-C share the same "@N" number.
+// One machine in the probe corpus publishes a port with no UUID at all, so the
+// roster keeps such a port with an empty one rather than dropping the port.
 //
 // The port-interface class differs by chip generation (AppleTCControllerType10
 // on M1 and M2, AppleHPMInterfaceType10 on M3 and later, and so on), so we match
@@ -25,7 +27,10 @@ import IOKit
 // The UUID is an in-session join key only. It is never shown in the UI.
 
 public struct RawHPMPort: Sendable {
-    public let uuid: String      // HPM controller UUID (raw, with dashes)
+    // HPM controller UUID (raw, with dashes). Empty when the node published
+    // none; PortManager recovers it from the SMC where the pairing is
+    // unambiguous, so nothing below should treat an empty string as identity.
+    public let uuid: String
     public let portNumber: Int   // the "@N" suffix
     public let portType: String  // "USB-C", "MagSafe 3", etc.
     public let serviceName: String
@@ -80,14 +85,26 @@ public enum HPMReader {
     // while this lived inside the walk they could not reach it at all: with
     // dedup disabled entirely, every sweep stayed green.
     static func roster(from ports: [RawHPMPort]) -> [RawHPMPort] {
-        var seen = Set<String>()  // dedup by "portType:portNumber"
+        var indexByKey: [String: Int] = [:]  // dedup by "portType:portNumber"
         var deduped: [RawHPMPort] = []
 
         for port in ports {
             let key = "\(port.portType):\(port.portNumber)"
-            guard !seen.contains(key) else { continue }
-            seen.insert(key)
-            deduped.append(port)
+            guard let kept = indexByKey[key] else {
+                indexByKey[key] = deduped.count
+                deduped.append(port)
+                continue
+            }
+
+            // First wins, with one exception: a record that carries the UUID
+            // beats a kept one that does not. Registry order is not ours to
+            // choose, and since the parse started admitting a port with no
+            // UUID, plain first-wins could keep the record with no identity
+            // and drop the one that has it. No corpus machine lists a
+            // connector twice, so this is defence rather than a fix.
+            if deduped[kept].uuid.isEmpty, !port.uuid.isEmpty {
+                deduped[kept] = port
+            }
         }
 
         // Sorted on port number and then type, because MagSafe and USB-C can
@@ -128,7 +145,16 @@ public enum HPMReader {
         if let builtIn = properties["BuiltIn"], !ioBool(builtIn) { return nil }
 
         guard let portNumber else { return nil }
-        guard let uuid = controllerUUID, !uuid.isEmpty else { return nil }
+
+        // A port with no UUID is still a physical port, so it is kept rather
+        // than dropped. One M2 laptop on macOS 27.0 publishes its second USB-C
+        // port with a blank UUID on the HPM node while the SMC still publishes
+        // that port's UUID, and dropping it took the whole port out of the app:
+        // no health counters, no liquid detection, and nowhere for its power
+        // channel to land. PortManager recovers the identity from the SMC where
+        // the pairing is unambiguous; where it cannot, the port stands without
+        // one and only the UUID joins are lost.
+        let uuid = controllerUUID ?? ""
 
         return RawHPMPort(
             uuid: uuid,

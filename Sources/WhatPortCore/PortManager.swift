@@ -986,6 +986,15 @@ extension PortManager {
         smcPortPower: [SMCPortPowerInput] = [],
         smcPortContracts: [SMCPortContractInput] = []
     ) -> [PortState] {
+        // A USB-C port whose HPM node published no UUID gets its identity back
+        // from the SMC where the pairing is unambiguous, before anything joins
+        // on it. Done here rather than in the reader because it needs both
+        // sources at once, and the reader only ever sees one.
+        let hpmPorts = Self.joinUnidentifiedPortByElimination(
+            hpmPorts: hpmPorts,
+            smcChannels: smcPortPower
+        )
+
         // Deduplicate TB data by socket ID (multiple adapters per port, take best)
         let tbBySocket = bestTBPerSocket(tbData)
 
@@ -1037,7 +1046,10 @@ extension PortManager {
                     power: powerData.first { $0.portIndex == hpm.portNumber },
                     ccActive: ccByPort[hpm.portNumber] ?? false
                 )
-                state.uuid = hpm.uuid
+                // A port the elimination could not identify keeps its place in
+                // the roster but carries no UUID: an empty string is not an
+                // identity, and every join downstream keys on this value.
+                state.uuid = hpm.uuid.isEmpty ? nil : hpm.uuid
                 state.health = PortHealth(
                     overcurrentCount: hpm.overcurrentCount,
                     plugEventCount: hpm.plugEventCount,
@@ -1740,6 +1752,78 @@ extension PortManager {
     // shared with the contract path, so the two joins cannot drift apart.
     private func normalisedUUID(_ uuid: String) -> String {
         SMCContractAttribution.normalisedUUID(uuid)
+    }
+
+    // Recover the identity of a USB-C port whose HPM node published no UUID,
+    // by elimination against the SMC's own port UUIDs.
+    //
+    // One machine in the probe corpus (an M2 laptop on macOS 27.0) publishes
+    // Port-USB-C@2 with a blank UUID while the SMC still publishes that port's
+    // UUID on D2. The reader keeps such a port rather than dropping it, so
+    // without this it would show up with no identity and its power-OUT channel
+    // would have nothing to attach to.
+    //
+    // The rule is deliberately narrow, and every part of it is there to keep
+    // the pairing forced rather than guessed: exactly one USB-C port without a
+    // UUID, exactly one SMC channel whose UUID matches no port at all, as many
+    // channels as there are ports, and a spare channel whose D-index is the one
+    // that port's place among the USB-C ports predicts. Any other shape is left
+    // alone, because a wrong UUID is worse than none: it would attribute
+    // another port's power reading to this one.
+    //
+    // MagSafe never takes part. Its ports are stamped from the HPM roster by
+    // port number, and SMC power-OUT attribution takes USB-C ports only, so
+    // pairing a blank MagSafe port here would buy nothing and could consume
+    // the one channel a real USB-C port needs.
+    static func joinUnidentifiedPortByElimination(
+        hpmPorts: [HPMPortInput],
+        smcChannels: [SMCPortPowerInput]
+    ) -> [HPMPortInput] {
+        let unidentified = hpmPorts.indices.filter { !hpmPorts[$0].isMagSafe && hpmPorts[$0].uuid.isEmpty }
+        guard unidentified.count == 1, let index = unidentified.first else { return hpmPorts }
+
+        // Every UUID the roster already accounts for, MagSafe included: a
+        // channel matching a MagSafe port is matched, not spare.
+        let claimed = Set(
+            hpmPorts.filter { !$0.uuid.isEmpty }.map { SMCContractAttribution.normalisedUUID($0.uuid) }
+        )
+        let spare = smcChannels.filter { !$0.uuid.isEmpty && !claimed.contains($0.uuid) }
+        guard spare.count == 1, let recovered = spare.first else { return hpmPorts }
+
+        // The two sides have to account for each other. Where there are more
+        // channels than ports, or fewer, some port is present on one side and
+        // absent from the other, and the spare channel is as likely to be that
+        // port's as this one's.
+        guard smcChannels.count == hpmPorts.count else { return hpmPorts }
+
+        // The check the counts cannot make on their own: a port missing from
+        // the roster leaves its channel spare while the counts still line up.
+        // The SMC publishes its channels in USB-C port order, D-channel j + 1
+        // for USB-C offset j, the same relation crossCheckPDJoin leans on, so
+        // the spare channel has to be the one this port's own offset predicts.
+        // If that assumption is ever wrong the join simply refuses, which is
+        // the port keeping no identity, never a wrong one.
+        let usbCPorts = hpmPorts.filter { !$0.isMagSafe }.sorted { $0.portNumber < $1.portNumber }
+        guard let offset = usbCPorts.firstIndex(where: { $0.uuid.isEmpty }),
+              recovered.channel == offset + 1 else { return hpmPorts }
+
+        var joined = hpmPorts
+        let port = hpmPorts[index]
+        joined[index] = HPMPortInput(
+            uuid: recovered.uuid,
+            portNumber: port.portNumber,
+            portType: port.portType,
+            overcurrentCount: port.overcurrentCount,
+            plugEventCount: port.plugEventCount,
+            connectionCount: port.connectionCount,
+            authorizationStatus: port.authorizationStatus,
+            ldcmStatus: port.ldcmStatus,
+            provisionedTransports: port.provisionedTransports,
+            unauthorizedTransports: port.unauthorizedTransports,
+            liquidDetected: port.liquidDetected,
+            mitigationsActive: port.mitigationsActive
+        )
+        return joined
     }
 
     // Stamp the stable HPM UUID and health data onto non-USB-C ports (MagSafe).

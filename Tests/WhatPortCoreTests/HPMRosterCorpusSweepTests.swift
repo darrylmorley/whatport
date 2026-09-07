@@ -15,7 +15,8 @@ struct HPMRosterCorpusSweepTests {
     // The parse takes a UUID the walk read from a controller ancestor. Probe 01
     // records the port node but not its ancestor, so where probe 35 is present
     // the real UUID is joined in from there, and where it is not this stands in.
-    // Its only job is to be non-empty, which is all the parse asks of it.
+    // It never collides in a roster even where a whole machine is handed the
+    // same one, because the dedup keys on portType:portNumber, not on the UUID.
     private static let placeholderUUID = "00000000-0000-0000-0000-000000000000"
 
     private struct MachineResult {
@@ -222,8 +223,8 @@ struct HPMRosterCorpusSweepTests {
         #expect(mismatches.isEmpty, "Roster disagreements: \(mismatches.prefix(5))")
     }
 
-    @Test("Every port carries a UUID and a positive number", .enabled(if: ProbeCorpus.isAvailable))
-    func everyPortCarriesAUUIDAndPositiveNumber() throws {
+    @Test("Every port round-trips its UUID and carries a positive number", .enabled(if: ProbeCorpus.isAvailable))
+    func everyPortRoundTripsItsUUIDAndCarriesAPositiveNumber() throws {
 
         var checked = 0
         var bad: [String] = []
@@ -257,17 +258,25 @@ struct HPMRosterCorpusSweepTests {
                 if port.uuid != realUUID { bad.append("\(machine.name) \(key): UUID did not round-trip") }
                 if port.portNumber <= 0 { bad.append("\(machine.name) \(key): port number \(port.portNumber)") }
 
-                // The UUID is the join key every other subsystem uses, so a port
-                // without one is worse than no port. Checking that the parse
-                // rejects it needs a port with no UUID, which the corpus never
-                // contains, so take a real one and withhold it.
+                // The UUID is the join key every other subsystem uses, but a
+                // port without one is still a physical port, with health
+                // counters and liquid detection worth showing. The corpus does
+                // contain one (m2_macos27.0_i USB-C:2, a blank UUID on the HPM
+                // node while the SMC still publishes that port's UUID), and the
+                // parse must keep it and leave the UUID empty rather than
+                // invent one. Checked here on every port by withholding a real
+                // UUID, so the rule is exercised on more than that one machine.
                 let withoutUUID = HPMReader.parse(
                     properties: block.properties,
                     entryName: block.entryName,
                     portNumber: block.portNumber,
                     controllerUUID: nil
                 )
-                if withoutUUID != nil { bad.append("\(machine.name) \(key): accepted a port with no UUID") }
+                if withoutUUID == nil {
+                    bad.append("\(machine.name) \(key): rejected a port with no UUID")
+                } else if withoutUUID?.uuid != "" {
+                    bad.append("\(machine.name) \(key): invented a UUID for a port that has none")
+                }
             }
         }
 

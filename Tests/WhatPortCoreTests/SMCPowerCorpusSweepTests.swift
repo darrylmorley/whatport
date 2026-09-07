@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+@testable import WhatPortCore
 @testable import WhatPortIOKit
 
 // Replays recorded SMC key dumps through the real channel and contract
@@ -51,9 +52,26 @@ struct SMCPowerCorpusSweepTests {
         var failures: [String] = []
 
         for machine in machines {
-            let rosterUUIDs = machine.roster.map { Self.normalised($0.uuid) }
+            let smcChannels = SMCPowerReader.buildPortPowerChannels(readKey: { machine.keys[$0] })
 
-            for channel in SMCPowerReader.buildPortPowerChannels(readKey: { machine.keys[$0] }) {
+            // Through the real join, not a reimplementation of it. One machine
+            // publishes a USB-C port with no UUID on its HPM node while the SMC
+            // still publishes that port's UUID, and PortManager pairs the two by
+            // elimination. Resolving here without that step would be testing a
+            // rule the app does not run.
+            let joined = PortManager.joinUnidentifiedPortByElimination(
+                hpmPorts: machine.roster.map {
+                    HPMPortInput(uuid: $0.uuid, portNumber: $0.portNumber, portType: $0.portType)
+                },
+                smcChannels: smcChannels.map {
+                    SMCPortPowerInput(present: $0.present, volts: $0.volts, amps: $0.amps, uuid: $0.uuid, channel: $0.channel)
+                }
+            )
+            // An unidentified port is not a candidate for any channel, so it
+            // must not sit in the match set as an empty string.
+            let rosterUUIDs = joined.map { Self.normalised($0.uuid) }.filter { !$0.isEmpty }
+
+            for channel in smcChannels {
                 channels += 1
                 let matches = rosterUUIDs.filter { $0 == channel.uuid }.count
                 if matches == 1 {
