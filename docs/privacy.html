@@ -5,22 +5,81 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#2563eb">
     <title>WhatPort: Privacy Policy</title>
-    <meta name="description" content="Privacy policy for WhatPort, the macOS menu bar app for real-time USB-C port status.">
-
+    <meta name="description" content="How WhatPort handles local port readings, Flight Recorder history, update checks and Pro licensing data.">
     <link rel="canonical" href="https://www.whatport.app/privacy.html">
-    <link rel="icon" href="icon.png" type="image/png">
-    <link rel="apple-touch-icon" href="icon.png">
-
+    <link rel="icon" href="/icon.png" type="image/png">
+    <link rel="apple-touch-icon" href="/icon.png">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="WhatPort">
+    <meta property="og:locale" content="en_GB">
     <meta property="og:url" content="https://www.whatport.app/privacy.html">
     <meta property="og:title" content="WhatPort: Privacy Policy">
-    <meta property="og:description" content="What data WhatPort handles: local IOKit reads, an update check, and the Pro licence.">
+    <meta property="og:description" content="How WhatPort handles local port readings, Flight Recorder history, update checks and Pro licensing data.">
     <meta property="og:image" content="https://www.whatport.app/og-card.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="WhatPort: see what your USB-C ports are doing, with the live port list">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="WhatPort: Privacy Policy">
-    <meta name="twitter:description" content="What data WhatPort handles: local IOKit reads, an update check, and the Pro licence.">
+    <meta name="twitter:description" content="How WhatPort handles local port readings, Flight Recorder history, update checks and Pro licensing data.">
     <meta name="twitter:image" content="https://www.whatport.app/og-card.png">
+    <meta name="twitter:image:alt" content="WhatPort: see what your USB-C ports are doing, with the live port list">
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://www.whatport.app/#publisher",
+      "name": "Bitmoor Ltd",
+      "url": "https://www.bitmoor.co.uk/"
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://www.whatport.app/#website",
+      "name": "WhatPort",
+      "url": "https://www.whatport.app/",
+      "publisher": {
+        "@id": "https://www.whatport.app/#publisher"
+      },
+      "inLanguage": "en-GB"
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://www.whatport.app/privacy.html#webpage",
+      "url": "https://www.whatport.app/privacy.html",
+      "name": "WhatPort: Privacy Policy",
+      "description": "How WhatPort handles local port readings, Flight Recorder history, update checks and Pro licensing data.",
+      "isPartOf": {
+        "@id": "https://www.whatport.app/#website"
+      },
+      "inLanguage": "en-GB",
+      "breadcrumb": {
+        "@id": "https://www.whatport.app/privacy.html#breadcrumbs"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://www.whatport.app/privacy.html#breadcrumbs",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://www.whatport.app/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Privacy",
+          "item": "https://www.whatport.app/privacy.html"
+        }
+      ]
+    }
+  ]
+}
+    </script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -182,25 +241,40 @@
         footer .wrap-wide { flex-direction: column; align-items: flex-start; }
       }
     </style>
+    <link rel="stylesheet" href="/site.css?v=4c3ccfb95beb">
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to content</a>
     <nav class="nav" aria-label="Primary">
       <div class="wrap-wide nav-inner">
-        <a class="brand" href="/">
-          <img class="mark" src="icon.png" alt="" aria-hidden="true" width="28" height="28">
-          <span>WhatPort</span>
-        </a>
+        <a class="brand" href="/" aria-label="WhatPort home"><img class="mark" src="/icon.png" alt="" aria-hidden="true" width="28" height="28"><span>WhatPort</span></a>
         <div class="nav-links">
           <a href="/#features">Features</a>
           <a href="/#pro">Pro</a>
+          <a href="/#how">How it works</a>
+          <a href="/#faq">FAQ</a>
           <a href="/#install">Install</a>
-          <a class="button" href="https://github.com/darrylmorley/whatport">GitHub</a>
+          <a href="https://github.com/darrylmorley/whatport">GitHub</a>
+          <a class="nav-download" href="https://github.com/darrylmorley/whatport/releases/latest/download/WhatPort.zip">Download free</a>
         </div>
+        <details class="mobile-nav" data-mobile-nav>
+          <summary aria-controls="mobile-nav-links"><span>Menu</span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path class="menu-bars" d="M4 6h16M4 12h16M4 18h16"/><path class="menu-close" d="m6 6 12 12M18 6 6 18"/></svg></summary>
+          <div class="mobile-nav-links" id="mobile-nav-links">
+          <a href="/#features">Features</a>
+          <a href="/#pro">Pro</a>
+          <a href="/#how">How it works</a>
+          <a href="/#faq">FAQ</a>
+          <a href="/#install">Install</a>
+          <a href="https://github.com/darrylmorley/whatport">GitHub</a>
+          <a class="nav-download" href="https://github.com/darrylmorley/whatport/releases/latest/download/WhatPort.zip">Download free</a>
+          </div>
+        </details>
       </div>
     </nav>
 
-    <main>
+    <main id="main">
       <div class="wrap">
+        <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Home</a><span aria-hidden="true">/</span><span aria-current="page">Privacy</span></nav>
         <h1>Privacy Policy</h1>
         <p class="subtitle">Last updated: 31 July 2026</p>
 
@@ -325,7 +399,7 @@
 
     <footer>
       <div class="wrap-wide">
-        <span>A <a href="https://www.bitmoor.co.uk">Bitmoor</a> product. Founded by <a href="https://github.com/darrylmorley">Darryl Morley</a>. MIT licensed.</span>
+        <span>A <a href="https://www.bitmoor.co.uk">Bitmoor</a> product. Founded by <a href="https://github.com/darrylmorley">Darryl</a>. MIT licensed.</span>
         <span class="footer-links">
           <a href="/">Home</a>
           <span class="sep">&middot;</span>
@@ -337,5 +411,6 @@
         </span>
       </div>
     </footer>
+    <script src="/navigation.js?v=70e8112be6ae" defer></script>
   </body>
 </html>

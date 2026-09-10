@@ -4,34 +4,71 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#2563eb">
-    <title>WhatPort: Real-time USB-C port monitoring for Mac</title>
-    <meta
-      name="description"
-      content="See what every USB-C port on your Mac is doing right now. Protocol, speed, lane status, and live power monitoring in a lightweight menu bar app. Free, open source, Intel and Apple Silicon."
-    >
+    <title>WhatPort: USB-C and Thunderbolt monitoring for Mac</title>
+    <meta name="description" content="Check connected devices, connection speed and power on your Mac for free. WhatPort Pro adds connection history, alerts and export for £9.99 once.">
     <link rel="canonical" href="https://www.whatport.app/">
-    <link rel="icon" href="icon.png" type="image/png">
-    <link rel="apple-touch-icon" href="icon.png">
-
+    <link rel="icon" href="/icon.png" type="image/png">
+    <link rel="apple-touch-icon" href="/icon.png">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="WhatPort">
+    <meta property="og:locale" content="en_GB">
     <meta property="og:url" content="https://www.whatport.app/">
-    <meta property="og:title" content="WhatPort: Real-time USB-C port monitoring for Mac">
-    <meta property="og:description" content="See what every USB-C port on your Mac is doing. Protocol detection, live lane status, and power monitoring in a menu bar app.">
+    <meta property="og:title" content="WhatPort: USB-C and Thunderbolt monitoring for Mac">
+    <meta property="og:description" content="Check connected devices, connection speed and power on your Mac for free. WhatPort Pro adds connection history, alerts and export for £9.99 once.">
     <meta property="og:image" content="https://www.whatport.app/og-card.png">
+    <meta property="og:image:type" content="image/png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="WhatPort: see what your USB-C ports are actually doing, with the menu bar port list">
-
+    <meta property="og:image:alt" content="WhatPort: see what your USB-C ports are doing, with the live port list">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="WhatPort: Real-time USB-C port monitoring for Mac">
-    <meta name="twitter:description" content="See what every USB-C port on your Mac is doing. Protocol detection, live lane status, and power monitoring in a menu bar app.">
+    <meta name="twitter:title" content="WhatPort: USB-C and Thunderbolt monitoring for Mac">
+    <meta name="twitter:description" content="Check connected devices, connection speed and power on your Mac for free. WhatPort Pro adds connection history, alerts and export for £9.99 once.">
     <meta name="twitter:image" content="https://www.whatport.app/og-card.png">
-    <meta name="twitter:image:alt" content="WhatPort: see what your USB-C ports are actually doing, with the menu bar port list">
-
+    <meta name="twitter:image:alt" content="WhatPort: see what your USB-C ports are doing, with the live port list">
     <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
     {
-      "@context": "https://schema.org",
+      "@type": "Organization",
+      "@id": "https://www.whatport.app/#publisher",
+      "name": "Bitmoor Ltd",
+      "url": "https://www.bitmoor.co.uk/"
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://www.whatport.app/#website",
+      "name": "WhatPort",
+      "url": "https://www.whatport.app/",
+      "publisher": {
+        "@id": "https://www.whatport.app/#publisher"
+      },
+      "inLanguage": "en-GB"
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://www.whatport.app/#webpage",
+      "url": "https://www.whatport.app/",
+      "name": "WhatPort: USB-C and Thunderbolt monitoring for Mac",
+      "description": "Check connected devices, connection speed and power on your Mac for free. WhatPort Pro adds connection history, alerts and export for £9.99 once.",
+      "isPartOf": {
+        "@id": "https://www.whatport.app/#website"
+      },
+      "inLanguage": "en-GB",
+      "mainEntity": {
+        "@id": "https://www.whatport.app/#app"
+      },
+      "hasPart": {
+        "@id": "https://www.whatport.app/#faq"
+      }
+    },
+    {
+      "@type": "Person",
+      "@id": "https://www.whatport.app/#creator",
+      "name": "Darryl",
+      "url": "https://www.darrylmorley.co.uk/"
+    },
+    {
       "@type": "SoftwareApplication",
       "name": "WhatPort",
       "operatingSystem": "macOS 14+",
@@ -41,7 +78,8 @@
           "@type": "Offer",
           "name": "WhatPort",
           "price": "0",
-          "priceCurrency": "GBP"
+          "priceCurrency": "GBP",
+          "url": "https://www.whatport.app/#install"
         },
         {
           "@type": "Offer",
@@ -51,23 +89,31 @@
           "url": "https://www.whatport.app/#pro"
         }
       ],
-      "description": "Real-time USB-C port monitoring for Mac. See protocol, speed, lane status, and power for every port.",
-      "url": "https://www.whatport.app",
+      "description": "Check connected devices, connection speed and power on your Mac for free. WhatPort Pro adds connection history, alerts and export for £9.99 once.",
+      "url": "https://www.whatport.app/",
       "downloadUrl": "https://github.com/darrylmorley/whatport/releases/latest/download/WhatPort.zip",
       "softwareVersion": "1.10.0",
       "author": {
-        "@type": "Person",
-        "name": "Darryl Morley",
-        "url": "https://github.com/darrylmorley"
+        "@id": "https://www.whatport.app/#creator"
       },
-      "license": "https://opensource.org/licenses/MIT"
-    }
-    </script>
-
-    <script type="application/ld+json">
+      "@id": "https://www.whatport.app/#app",
+      "publisher": {
+        "@id": "https://www.whatport.app/#publisher"
+      },
+      "image": "https://www.whatport.app/og-card.png",
+      "screenshot": [
+        "https://www.whatport.app/screenshot-list.webp",
+        "https://www.whatport.app/flight-recorder-timeline.webp"
+      ],
+      "installUrl": "https://www.whatport.app/#install"
+    },
     {
-      "@context": "https://schema.org",
       "@type": "FAQPage",
+      "@id": "https://www.whatport.app/#faq",
+      "url": "https://www.whatport.app/#faq",
+      "isPartOf": {
+        "@id": "https://www.whatport.app/#webpage"
+      },
       "mainEntity": [
         {
           "@type": "Question",
@@ -98,7 +144,7 @@
           "name": "Does it phone home?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No analytics, no telemetry. The app reads local IOKit data and nothing else. The one network request it makes is the update check: it asks the GitHub releases API whether a newer version exists, and downloads it only if you click Update. The source is on GitHub if you want to verify."
+            "text": "Port readings and Flight Recorder history stay on your Mac. WhatPort checks GitHub for updates and downloads a release when you choose to install it. Pro activation and licence validation send your licence key and Mac identifier to the licensing service. There are no in-app usage analytics. See the privacy policy for details."
           }
         },
         {
@@ -135,6 +181,8 @@
         }
       ]
     }
+  ]
+}
     </script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -894,50 +942,58 @@
       }
       .hero-pro-line a { color: var(--accent); font-weight: 500; }
     </style>
+    <link rel="stylesheet" href="/site.css?v=4c3ccfb95beb">
   </head>
-  <body>
+  <body class="home">
+    <a class="skip-link" href="#main">Skip to content</a>
     <nav class="nav" aria-label="Primary">
       <div class="wrap nav-inner">
-        <a class="brand" href="/">
-          <img class="mark" src="icon.png" alt="" aria-hidden="true" width="28" height="28">
-          <span>WhatPort</span>
-        </a>
+        <a class="brand" href="/" aria-label="WhatPort home"><img class="mark" src="/icon.png" alt="" aria-hidden="true" width="28" height="28"><span>WhatPort</span></a>
         <div class="nav-links">
-          <a href="#features">Features</a>
-          <a href="#how">How it works</a>
-          <a href="#pro">Pro</a>
-          <a href="#install">Install</a>
-          <a class="button secondary" href="https://github.com/darrylmorley/whatport">GitHub</a>
+          <a href="/#features">Features</a>
+          <a href="/#pro">Pro</a>
+          <a href="/#how">How it works</a>
+          <a href="/#faq">FAQ</a>
+          <a href="/#install">Install</a>
+          <a href="https://github.com/darrylmorley/whatport">GitHub</a>
+          <a class="nav-download" href="https://github.com/darrylmorley/whatport/releases/latest/download/WhatPort.zip">Download free</a>
         </div>
+        <details class="mobile-nav" data-mobile-nav>
+          <summary aria-controls="mobile-nav-links"><span>Menu</span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path class="menu-bars" d="M4 6h16M4 12h16M4 18h16"/><path class="menu-close" d="m6 6 12 12M18 6 6 18"/></svg></summary>
+          <div class="mobile-nav-links" id="mobile-nav-links">
+          <a href="/#features">Features</a>
+          <a href="/#pro">Pro</a>
+          <a href="/#how">How it works</a>
+          <a href="/#faq">FAQ</a>
+          <a href="/#install">Install</a>
+          <a href="https://github.com/darrylmorley/whatport">GitHub</a>
+          <a class="nav-download" href="https://github.com/darrylmorley/whatport/releases/latest/download/WhatPort.zip">Download free</a>
+          </div>
+        </details>
       </div>
     </nav>
 
+    <main id="main">
     <header class="hero">
       <div class="wrap hero-grid">
         <div class="hero-copy">
           <span class="eyebrow">
             <span class="dot-accent" aria-hidden="true"></span>
-            macOS menu bar utility
+            USB-C and Thunderbolt, explained
           </span>
           <h1>See what your USB-C ports are <span class="accent">actually doing.</span></h1>
           <p class="lede">
-            WhatPort shows the protocol, speed, lane status, and power draw
-            for every USB-C and Thunderbolt port on your Mac. Real-time data,
-            no guessing.
+            Check connected devices, negotiated speeds and the power your Mac reports.
+            Investigate slow drives, charging surprises and unreliable docks from your menu bar.
           </p>
           <div class="actions">
             <a class="button primary" href="https://github.com/darrylmorley/whatport/releases/latest/download/WhatPort.zip">
-              Download for macOS
+              Download free
               <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
             </a>
-            <button class="button buy" id="buy-pro-hero" type="button">
-              Buy Pro &middot; £9.99
-              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-            </button>
+            <a class="button secondary" href="#pro">Explore Pro &middot; £9.99</a>
           </div>
-          <p class="hero-pro-line">
-            The app is free and open source. Pro adds the <a href="#pro">Flight Recorder</a> &middot; <a href="https://github.com/darrylmorley/whatport">View source</a>
-          </p>
+          <p class="hero-pro-line">Free shows what is connected now. Pro adds a history of connection and power events, with alerts and export. £9.99 once, for up to two Macs.</p>
           <div class="meta-row">
             <span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
@@ -945,44 +1001,49 @@
             </span>
             <span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-              macOS 14+, Intel and Apple Silicon
+              macOS 14+ · Full detail on Apple Silicon
             </span>
             <span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-              Signed and notarised
+              Intel Macs supported with reduced detail
             </span>
           </div>
         </div>
-        <div class="hero-shot">
-          <img src="screenshot-list.webp" alt="WhatPort menu bar showing connected USB-C devices with protocol and power info" width="392" height="492">
-        </div>
+        <figure class="hero-shot">
+          <img src="screenshot-list.webp" alt="WhatPort menu bar showing connected USB-C devices with protocol and power info" width="392" height="492" fetchpriority="high">
+          <figcaption>The free live view. Select a port to explore its connection.</figcaption>
+        </figure>
       </div>
     </header>
 
-    <section class="problem">
+    <section class="problem" aria-labelledby="problem-heading">
       <div class="wrap">
         <div class="section-head">
-          <span class="section-tag">The problem</span>
-          <h2>Every USB-C port looks the same. They are not.</h2>
-          <p>The ports on your Mac are identical holes. One might be Thunderbolt 5, the next plain USB. macOS won't tell you which is which, why a charger crawls, or whether your display is running at full resolution. WhatPort does.</p>
+          <span class="section-tag">Start with the connection</span>
+          <h2 id="problem-heading">Something plugged in. Something not right.</h2>
+          <p>The same USB-C connector can carry data, video and power. WhatPort helps you see what your Mac has actually connected, so you have something concrete to check.</p>
         </div>
         <div class="problem-grid">
-          <div class="problem-card">
-            <span class="label speed">Which port is fastest?</span>
-            <div class="ask">Thunderbolt or just USB?</div>
-            <p>TB5, TB4, and USB-C ports look identical. Plug your fast SSD into the wrong one and it crawls, with nothing on screen to tell you why.</p>
-          </div>
-          <div class="problem-card">
-            <span class="label power">Why is charging slow?</span>
-            <div class="ask">15W when you expected 96W?</div>
-            <p>A port might be negotiating a fraction of the power you think. WhatPort shows the live watts, voltage, and current, so you can see the limit.</p>
-          </div>
-          <div class="problem-card">
-            <span class="label display">Is my display at full res?</span>
-            <div class="ask">Fewer lanes than you paid for?</div>
-            <p>DisplayPort alt-mode can quietly run at reduced lanes or link rate. WhatPort shows the lanes in use and the negotiated speed per lane.</p>
-          </div>
+          <article class="problem-card">
+            <span class="label speed">Slow drive</span>
+            <h3 class="ask">Did it connect at the speed you expected?</h3>
+            <p>Check whether the connection is USB or Thunderbolt and see its negotiated speed. Compare the reading after changing a cable, dock or port.</p>
+            <a class="text-link" href="#features">Explore the live view →</a>
+          </article>
+          <article class="problem-card">
+            <span class="label power">Charging surprises</span>
+            <h3 class="ask">What power is the Mac reporting?</h3>
+            <p>See the connected charger, reported power and charging status. A high-wattage charger will not always deliver its maximum: battery level and charging management matter too.</p>
+            <a class="text-link" href="#screenshots">See the charging detail →</a>
+          </article>
+          <article class="problem-card">
+            <span class="label display">Unreliable dock</span>
+            <h3 class="ask">Did a connection drop while you were away?</h3>
+            <p>Pro’s Flight Recorder keeps connection and power events over time. Review the timeline when a drive disconnects or your dock behaves differently.</p>
+            <a class="text-link" href="#pro">Explore the Flight Recorder →</a>
+          </article>
         </div>
+        <p class="problem-note">WhatPort reports the information your Mac exposes. Negotiated link speed is not a file-transfer benchmark, and an event in the timeline does not by itself prove which cable or device caused a fault.</p>
       </div>
     </section>
 
@@ -990,7 +1051,7 @@
       <div class="wrap">
         <div class="section-head">
           <span class="section-tag">Protocol detection</span>
-          <h2>Every port. Every protocol. At a glance.</h2>
+          <h2>Know how each device is connected.</h2>
           <p>
             WhatPort identifies what each port is carrying and colour-codes it so you can tell at a glance whether you're on Thunderbolt, DisplayPort, USB, or just charging.
           </p>
@@ -1016,7 +1077,7 @@
               <span class="protocol-dot" style="background: #16a34a;" aria-hidden="true"></span>
               USB
             </div>
-            <p>USB 2.0 through USB 3.2 Gen 2x2. Device name, speed, and version.</p>
+            <p>The USB version and connection speed reported by your Mac, with the connected device name.</p>
           </div>
           <div class="protocol-card">
             <div class="proto-name">
@@ -1029,14 +1090,75 @@
       </div>
     </section>
 
+    <section class="pro" id="pro">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="section-tag">WhatPort Pro</span>
+          <h2>Catch the disconnect you missed.</h2>
+          <p>
+            Pro’s Flight Recorder keeps a history of connection and power events. Investigate a dock dropping out or a charger losing power after it happens, and export a session when you need to share the evidence.
+          </p>
+        </div>
+
+        <div class="pro-card-wrap">
+          <div class="pricing-card free-plan">
+            <span class="card-label">Start with the live view</span>
+            <h3 class="card-title">WhatPort Free</h3>
+            <span class="price">£0</span>
+            <span class="price-period">Free and open source</span>
+            <p class="plan-summary">Check what is connected right now. No licence key needed.</p>
+            <ul class="pro-checklist"><li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg><span>Live USB-C and Thunderbolt port status</span></li><li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg><span>Protocol and negotiated connection speed</span></li><li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg><span>Connected device and dock names</span></li><li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg><span>Reported power and charging status</span></li><li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg><span>Detailed lane and display readings where supported</span></li></ul>
+            <a class="button primary" href="https://github.com/darrylmorley/whatport/releases/latest/download/WhatPort.zip">Download free</a>
+            <p class="buy-reassure">Signed and notarised. macOS 14+.<br>Full detail on Apple Silicon; reduced detail on Intel.</p>
+          </div>
+
+          <div class="pricing-card pro-plan">
+            <span class="card-label">One-time purchase</span>
+            <h3 class="card-title">WhatPort Pro</h3>
+            <span class="price">£9.99</span>
+            <span class="price-period">one-time &nbsp;&middot;&nbsp; works on 2 Macs</span>
+            <ul class="pro-checklist"><li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg><span>Connection and power event history that persists across app restarts</span></li><li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg><span>A device tree showing what is behind each port and dock</span></li><li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg><span>Power graphs over time for every port</span></li><li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg><span>Port health scores and power-delivery reliability counters</span></li><li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg><span>Alerts for disconnects, link errors and other port events</span></li><li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg><span>Session recording with CSV and JSON export</span></li></ul>
+            <button class="button primary" id="buy-pro" type="button" style="width:100%;">
+              Buy WhatPort Pro
+              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+            </button>
+            <p class="buy-reassure"><strong>14-day money-back guarantee, no questions asked.</strong> Full detail on Apple Silicon; Intel Macs run in reduced detail.</p>
+            <p class="buy-stripe-note">Secure checkout via Stripe. Your licence key is emailed instantly.<br>By buying you agree to the <a href="/terms.html">terms and conditions</a>.</p>
+            <p class="buy-stripe-note">Student or educator? Email <a href="mailto:support@whatport.app">support@whatport.app</a> from your academic address for 50% off.</p>
+            <p class="buy-error" id="buy-error" role="alert" hidden></p>
+          </div>
+          <p class="pro-existing">Already bought? Your key is in your email. Activate it in the app under Flight Recorder.</p>
+        </div>
+        <div class="fr-grid">
+          <figure>
+            <img src="flight-recorder-timeline.webp" alt="Flight Recorder timeline listing plug, unplug, and power events with timestamps" width="812" height="644" loading="lazy">
+            <figcaption>Event timeline: every plug, unplug, and power change</figcaption>
+          </figure>
+          <figure>
+            <img src="flight-recorder-graphs.webp" alt="Flight Recorder power graph for every port over a selectable time range" width="812" height="644" loading="lazy">
+            <figcaption>Power graphs over time, per port</figcaption>
+          </figure>
+          <figure>
+            <img src="flight-recorder-health.webp" alt="Flight Recorder port health scores with uptime, connection, and error counts" width="812" height="644" loading="lazy">
+            <figcaption>Port health scoring</figcaption>
+          </figure>
+          <figure>
+            <img src="flight-recorder-alerts.webp" alt="Flight Recorder alert rules for overcurrent, link errors, disconnects, and protocol downgrades" width="939" height="644" loading="lazy">
+            <figcaption>Alerts on overcurrent, link errors, and more</figcaption>
+          </figure>
+        </div>
+
+      </div>
+    </section>
+
     <section class="features" id="features">
       <div class="wrap">
         <div class="section-head">
           <span class="section-tag">Features</span>
-          <h2>Everything your ports know, now you know too.</h2>
+          <h2>A clearer picture of every connection.</h2>
           <p>
-            WhatPort reads real-time data from IOKit and turns it into
-            something you can actually understand. No terminal needed.
+            See connected devices, connection speed and power in one place.
+            Open a port’s detail view when you want to inspect the numbers. Available detail depends on your Mac and the connected hardware.
           </p>
         </div>
 
@@ -1126,7 +1248,7 @@
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
             </div>
             <h3>Liquid detection</h3>
-            <p>Flags a wet port before corrosion sets in, with advice to disconnect and dry it out (M3 and later).</p>
+            <p>Shows liquid-detection warnings reported by supported Macs (M3 and later), with guidance to disconnect the device. An absent warning does not establish that a port is dry.</p>
           </article>
 
           <article class="feature">
@@ -1148,7 +1270,7 @@
       </div>
     </section>
 
-    <section class="screenshots">
+    <section class="screenshots" id="screenshots">
       <div class="wrap">
         <div class="section-head">
           <span class="section-tag">Detail views</span>
@@ -1184,101 +1306,21 @@
       </div>
     </section>
 
-    <section class="pro" id="pro">
-      <div class="wrap">
-        <div class="section-head">
-          <span class="section-tag">WhatPort Pro</span>
-          <h2>The Flight Recorder keeps watching when you're not.</h2>
-          <p>
-            The live view tells you what your ports are doing right now. The Flight Recorder
-            runs always-on in the background and records it, so you can catch the intermittent
-            faults that only show up when nobody's looking. It survives restarts and stays light on memory.
-          </p>
-        </div>
-
-        <div class="fr-grid">
-          <figure>
-            <img src="flight-recorder-timeline.webp" alt="Flight Recorder timeline listing plug, unplug, and power events with timestamps" width="812" height="644" loading="lazy">
-            <figcaption>Event timeline: every plug, unplug, and power change</figcaption>
-          </figure>
-          <figure>
-            <img src="flight-recorder-graphs.webp" alt="Flight Recorder power graph for every port over a selectable time range" width="812" height="644" loading="lazy">
-            <figcaption>Power graphs over time, per port</figcaption>
-          </figure>
-          <figure>
-            <img src="flight-recorder-health.webp" alt="Flight Recorder port health scores with uptime, connection, and error counts" width="812" height="644" loading="lazy">
-            <figcaption>Port health scoring</figcaption>
-          </figure>
-          <figure>
-            <img src="flight-recorder-alerts.webp" alt="Flight Recorder alert rules for overcurrent, link errors, disconnects, and protocol downgrades" width="939" height="644" loading="lazy">
-            <figcaption>Alerts on overcurrent, link errors, and more</figcaption>
-          </figure>
-        </div>
-
-        <div class="pro-card-wrap">
-          <div class="pricing-card">
-            <span class="card-label">One-time purchase</span>
-            <p class="card-title">Flight Recorder</p>
-            <span class="price">£9.99</span>
-            <span class="price-period">one-time &nbsp;&middot;&nbsp; works on 2 Macs</span>
-            <ul class="pro-checklist">
-              <li>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-                Always-on recording that survives restarts and overnight kills
-              </li>
-              <li>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-                Event timeline: see every plug, unplug, and power event over time
-              </li>
-              <li>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-                Device tree per port: everything behind your hub or dock, and which one each device came through
-              </li>
-              <li>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-                Power graphs over time for every port
-              </li>
-              <li>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-                Port health scoring with threshold alerts
-              </li>
-              <li>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-                PD reliability counters: the port controller's own hard resets, role-swap failures, and error counts, folded into each port's health
-              </li>
-              <li>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-                Session recording with JSON and CSV export
-              </li>
-              <li>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-                Works on up to 2 Macs with one key
-              </li>
-            </ul>
-            <button class="button primary" id="buy-pro" type="button" style="width:100%;">
-              Buy WhatPort Pro
-              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-            </button>
-            <p class="buy-reassure"><strong>14-day money-back guarantee, no questions asked.</strong> Full detail on Apple Silicon; Intel Macs run in reduced detail.</p>
-            <p class="buy-stripe-note">Secure checkout via Stripe. Your licence key is emailed instantly.<br>By buying you agree to the <a href="/terms.html">terms and conditions</a>.</p>
-            <p class="buy-stripe-note">Student or educator? Email <a href="mailto:support@whatport.app">support@whatport.app</a> from your academic address for 50% off.</p>
-            <p class="buy-error" id="buy-error" role="alert" hidden></p>
-          </div>
-          <p class="pro-existing">Already bought? Your key is in your email. Activate it in the app under Flight Recorder.</p>
-        </div>
-      </div>
-    </section>
-
     <section id="how">
       <div class="wrap">
         <div class="section-head">
           <span class="section-tag">How it works</span>
-          <h2>Unprivileged IOKit reads, one clear picture.</h2>
-          <p>
-            WhatPort correlates several IOKit and SMC services per physical port. Everything is read unprivileged: no root access, no special entitlements, no background daemon. State updates the moment a device connects or disconnects, and is polled every second as a safety net.
-          </p>
+          <h2>Connect a device. See what changes.</h2>
+          <p>Start with the free app and check the connection in your menu bar. WhatPort reads port information; it does not change how the connection is configured.</p>
         </div>
-
+        <div class="how-grid">
+          <div class="how-card"><div class="step">1</div><h3>Open WhatPort</h3><p>Download the signed app and drag it into Applications. Open it to see the ports your Mac exposes.</p></div>
+          <div class="how-card"><div class="step">2</div><h3>Plug in and compare</h3><p>Connect your drive, display or charger. Select its port to inspect the connection, then see what changes when you try another cable or port.</p></div>
+          <div class="how-card"><div class="step">3</div><h3>Record an intermittent problem</h3><p>Use the Flight Recorder to keep a history, review events and export a session when you need it.</p><a class="pro-note" href="#pro">Available with Pro →</a></div>
+        </div>
+        <details class="technical-details">
+          <summary>Technical details: where the readings come from</summary>
+          <p>WhatPort reads IOKit and SMC services without root access. It responds to connection changes and polls for updated readings. Available services vary between Apple Silicon and Intel Macs.</p>
         <div class="how-grid">
           <div class="how-card">
             <div class="step">1</div>
@@ -1296,6 +1338,7 @@
             <p>Per-port power, split into power in (charging) and power out (to your devices): watts, voltage, current, and the negotiated USB-PD contract.</p>
           </div>
         </div>
+        </details>
       </div>
     </section>
 
@@ -1321,7 +1364,7 @@
           </div>
           <div class="faq-item">
             <h3>Does it phone home?</h3>
-            <p>No analytics, no telemetry. The app reads local IOKit data and nothing else. The one network request it makes is the update check: it asks the GitHub releases API whether a newer version exists, and downloads it only if you click Update. The source is on GitHub if you want to verify.</p>
+            <p>Port readings and Flight Recorder history stay on your Mac. WhatPort checks GitHub for updates and downloads a release when you choose to install it. Pro activation and licence validation send your licence key and Mac identifier to the licensing service. There are no in-app usage analytics. See the <a href="/privacy.html">privacy policy</a> for details.</p>
           </div>
           <div class="faq-item">
             <h3>How does the two-Mac licence work?</h3>
@@ -1363,7 +1406,7 @@
             <img class="family-icon" src="/whatbattery-icon.png" alt="" width="48" height="48" loading="lazy">
             <div>
               <h3>WhatBattery</h3>
-              <p>Unrounded battery health, live charge and discharge in watts, per-cell readings, and where the charge went overnight.</p>
+              <p>Understand battery health, charging and power use. WhatBattery Pro adds overnight drain insights and a longer history.</p>
               <span class="family-go">Visit whatbattery.app →</span>
             </div>
           </a>
@@ -1429,9 +1472,10 @@
       </div>
     </section>
 
+    </main>
     <footer>
       <div class="wrap">
-        <span>A <a href="https://www.bitmoor.co.uk">Bitmoor</a> product. Founded by <a href="https://github.com/darrylmorley">Darryl Morley</a>. MIT licensed.</span>
+        <span>A <a href="https://www.bitmoor.co.uk">Bitmoor</a> product. Founded by <a href="https://github.com/darrylmorley">Darryl</a>. MIT licensed.</span>
         <span class="footer-links">
           <a href="https://github.com/darrylmorley/whatport">Source</a>
           <span class="sep">&middot;</span>
@@ -1475,5 +1519,6 @@
         wireBuyButton(document.getElementById('buy-pro-hero'));
       })();
     </script>
+    <script src="/navigation.js?v=70e8112be6ae" defer></script>
   </body>
 </html>
