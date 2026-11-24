@@ -55,17 +55,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             NSApplication.shared.applicationIconImage = iconImage
         }
 
-        // The Settings shortcut (Cmd+,) is wired through SwiftUI's command
-        // system (see WhatPortApp) and routed back here. Quit (Cmd+Q) is
-        // SwiftUI's standard menu item. Listen for the Settings command.
-        NotificationCenter.default.addObserver(
-            forName: .openSettingsRequested,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.openSettings() }
-        }
-
         // Move any existing login-item users onto the keep-alive agent so the
         // overnight-survival behaviour applies without them re-toggling.
         LaunchAtLogin.migrateFromMainAppIfNeeded()
@@ -410,7 +399,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         statusItem.menu = nil
     }
 
-    @objc private func openSettings() {
+    // Not private: the main menu (MainMenu) targets this and checkForUpdates.
+    @objc func openSettings() {
         makeFooterContext().showingSettings = true
         showPopover()
     }
@@ -419,7 +409,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NSWorkspace.shared.open(AboutView.gitHubURL)
     }
 
-    @objc private func checkForUpdates() {
+    @objc func checkForUpdates() {
         UpdateChecker.shared.check(silent: false)
     }
 
