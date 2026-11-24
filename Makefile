@@ -1,19 +1,21 @@
 # WhatPort build helpers
 
-BINARY = .build/arm64-apple-macosx/debug/WhatPort
 APP = .build/WhatPort.app
-BUNDLE_RES = .build/arm64-apple-macosx/debug/WhatPort_WhatPort.bundle
 
 .PHONY: build app run clean test
 
 build:
 	swift build
 
+# Ask SwiftPM where it put the build rather than hard-coding the path: the
+# layout changed with Xcode 27's SwiftPM, and the old folder still held a stale
+# binary that this target kept bundling without complaint.
 app: build
 	@rm -rf $(APP)
 	@mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
-	@cp $(BINARY) $(APP)/Contents/MacOS/WhatPort
-	@if [ -d "$(BUNDLE_RES)" ]; then cp -R $(BUNDLE_RES) $(APP)/Contents/MacOS/; fi
+	@BIN_DIR="$$(swift build --show-bin-path)" && \
+		cp "$$BIN_DIR/WhatPort" $(APP)/Contents/MacOS/WhatPort && \
+		cp -R "$$BIN_DIR/WhatPort_WhatPort.bundle" $(APP)/Contents/MacOS/
 	@if [ -f "Sources/WhatPort/Resources/AppIcon.png" ]; then \
 		cp Sources/WhatPort/Resources/AppIcon.png $(APP)/Contents/Resources/; \
 	fi
