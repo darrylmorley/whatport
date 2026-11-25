@@ -1256,7 +1256,7 @@
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </div>
             <h3>Built-in updates</h3>
-            <p>A banner when a new version is out, and one click installs it. WhatPort checks the download is signed and notarised by Apple before it swaps itself over. Homebrew users can carry on with <code>brew upgrade</code>.</p>
+            <p>A banner when a new version is out, and one click installs it. WhatPort checks the download is signed and notarised by Apple before it swaps itself over. Homebrew users can carry on with <code>brew upgrade</code>, after a one-time <code>brew trust</code> (see Install).</p>
           </article>
 
           <article class="feature">
@@ -1448,6 +1448,11 @@
               Prefer the terminal? Install with <strong style="color: #fff;">brew</strong> and get upgrades for free.
             </p>
 <pre>brew install --cask \
+  darrylmorley/whatport/whatport</pre>
+            <p>
+              Installed with brew before? Run this once so <strong style="color: #fff;">brew upgrade</strong> picks up new versions:
+            </p>
+<pre>brew trust --cask \
   darrylmorley/whatport/whatport</pre>
             <a class="button primary" href="https://github.com/darrylmorley/homebrew-whatport">
               View the tap

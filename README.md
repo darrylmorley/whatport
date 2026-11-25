@@ -70,6 +70,12 @@ Download the latest release from the [releases page](https://github.com/darrylmo
 brew install --cask darrylmorley/whatport/whatport
 ```
 
+Installed with Homebrew before? Homebrew 6.0 and later ignores casks from taps you haven't trusted, so `brew upgrade` skips WhatPort until you run this once:
+
+```bash
+brew trust --cask darrylmorley/whatport/whatport
+```
+
 The app is signed and notarized by Apple.
 
 ## Requirements
